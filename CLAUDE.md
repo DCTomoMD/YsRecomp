@@ -168,3 +168,120 @@ natively on PC (Windows). The generated C mimics the CPU instruction by instruct
 
 > 以下は feature/japanese-disc-support ブランチの作業規則。上記の上流の記述と矛盾する場合は、以下を優先する。
 
+# YsRecomp 日本版対応・クロスプラットフォーム化プロジェクト（作業規則 v2）
+
+## 目的
+- 北米版 Ys Book I & II（TurboGrafx-CD）専用の YsRecomp に、
+  日本版 PC Engine CD-ROM²「イースI・II」への対応を追加する。
+- 単一の共通ソースから macOS（Apple Silicon）と Windows x64 の両方を構築できるようにする。
+- 北米版の既存動作を壊さない。
+- 上記の上流 CLAUDE.md の規則（特に「PCERecomp に Ys 固有のものを入れない」
+  「PC 側はエミュレートされたコンソールの状態を変えない」「ファイルは u8_fopen で開く」
+  「ロックの順序」）は引き続き守る。開発環境に関する記述（Windows 11 / PowerShell）だけは本規則で置き換える。
+
+## 開発環境（macOS 先行）
+- 主開発機：macOS / Apple Silicon（arm64）、APFS ボリューム、パスに空白なし。
+- 上流 YsRecomp は Windows / MSVC / PowerShell 前提。M3 完了まで macOS ではゲーム本体をビルドできない。
+  ビルドできない状態で「動作確認済み」と報告してはならない。
+- Windows での検証は、ユーザーが Windows VM 上で行う。
+  Windows のビルド・試験が必要な場合は、VM で実行するコマンドと期待結果を提示して停止する。
+- Python は `.venv/bin/python` を使う（tomllib のため 3.11 以上が必要。上流は 3.14 を前提）。
+  `brew install` と `pip install` は実行前に必ず確認を求める。
+- シェルコマンドは macOS（BSD）互換で書く。
+  - `sed -i ''` を使う（GNU の `sed -i` は不可）。
+  - `find` の括弧は `\(` `\)` とエスケープする。
+  - GNU 専用オプション（`grep -P`、`readlink -f` など）を使わない。
+- ファイル名の Unicode：macOS は NFD で保存することがある。
+  CUE 内の FILE 名とディスク上のファイル名は NFC に正規化して比較する
+  （現状のコードには正規化処理がない。review_jp/00 の 3.1 節と 17 章を参照）。
+- `._*` と `.DS_Store` は、ソース列挙・生成物・パッケージから必ず除外する。
+
+## ダウンロードとネットワーク
+- 調査だけを行う Phase（Phase 0、Phase 1、Phase 2、M0）では、ダウンロードとビルドを行わない。
+- ビルドを行う Phase では、CMake の FetchContent による SDL3（バージョン固定）の取得だけを許可する。
+  それ以外の依存の追加・更新は、事前にユーザーの承認を得る。
+
+## サブモジュール external/PCERecomp
+- PCERecomp の変更が必要になった場合は、変更せずに停止して報告する。
+  運用方法（上流へ提案する／自分のフォークに切り替える／パッチとして管理する）はユーザーが決める。
+- 承認された後も、PCERecomp に Ys 固有のコードを入れない（上流の規則）。
+
+## roms/ の配置
+- ユーザーの配置：roms/usa（北米版）、roms/jp（日本版）、roms/bios（System Card）。読み取り専用、Git 管理外。
+- 上流 CMake は roms/ 直下の固定名を参照する（CMakeLists.txt:24-25）：
+  - `roms/Ys Book I & II (USA).cue`
+  - `roms/[BIOS] TurboGrafx CD System Card (USA) (v2.0).pce`
+- 両者の不一致は M2 で解消する（パスを CMake のキャッシュ変数で指定できるようにする）。
+  それまで roms/ の中身を移動・リンク・改名しない。
+
+## フェーズ順序（macOS 先行）
+1. 調査：Phase 0（完了）と M0（移植性）。どちらも読み取りのみ。
+2. 設計・解析：Phase 1（Plan mode）、Phase 2（日米ディスク解析）。
+3. Mac 版を動かす：M1 → M2 → M3。北米版を macOS で動かし、これを新しい基準にする。
+4. 日本版の実装：Phase 3A〜3D。
+5. 統合試験：Phase 4（macOS と Windows VM の両方）。
+6. 監査：Fable 5.2（別の worktree で実施）。
+
+## 役割
+- Opus 5.5：調査、設計、実装、試験、監査指摘の再検証、修正。
+- Fable 5.2：独立監査のみ。この規則の方針を前提にしない。
+- ユーザー：各 Phase の承認者。コミットはユーザーが行う。
+
+## 絶対規則
+1. 指示された Phase だけを実施し、終了条件を満たしたら停止する。次の Phase へは承認なしに進まない。
+2. git commit / tag / push / reset --hard / clean を実行しない。
+3. roms/ と local_analysis/、および BIN/CUE/ISO/BIOS・音声・画像・文章データを Git に追加しない。
+   ROM と BIOS に由来する文章・フォント・画像をソースコードに埋め込まない
+   （日本版の漢字フォントは System Card に由来するため、特に注意する）。roms/ は読み取り専用として扱う。
+4. sector / offset / load address / RAM address / hook target を推測で決めない。
+   北米版の値を日本版に流用しない。未確認の値は UNKNOWN として記録し、実装を止める。
+5. 確認済みの事実（CONFIRMED）、推測（ASSUMPTION）、不明（UNKNOWN）を必ず区別して書く。
+6. テストを通すために期待値を緩めたり、skip を追加したり、例外を握りつぶしたりしない。
+7. 変更箇所以外を一括でフォーマットしない。ついでのリファクタリングもしない。
+8. ゲーム版の差（USA / Japan）は profile に、OS の差（Windows / macOS）は host 層に置く。
+   両者を同じ条件分岐に混ぜない。`if (japanese)` を各所に散在させない。
+9. ゲームコアは Objective-C++ にしない。`.mm` は macOS host 層の必要な箇所に限る。
+10. フックのシグネチャが合わないと機能は黙って無効になる。日本版で無効になった機能は、
+    無効であることをログと文書に必ず残す。
+
+## ディレクトリ
+- roms/usa, roms/jp, roms/bios：ユーザー所有のディスク（読み取り専用、Git 管理外）
+- local_analysis/：個人的な解析結果やハッシュ値（Git 管理外）
+- review_jp/：日本版対応の文書（Phase 0〜4）。00_repository_inventory.md が基礎資料
+- review_portability/：移植・共通化の文書（M0 以降）
+- review_fable/、review_fable_final/：Fable の監査報告（Opus は上書きしない）
+- review_opus/：Fable の指摘の再検証と修正の記録
+
+## ビルドと試験
+出典：review_jp/00_repository_inventory.md の 2 章、11 章、18 章（上流の README と build.ps1 から書き出したもの。未検証）。
+
+### Windows（VM、上流の手順）
+前提：Windows 10/11 x64、VS 2022 Build Tools、Python 3.14、Git。初回の構成時に SDL3 を取得するためネットワークが必要。
+roms/ 直下に北米版の cue と bin 43 本、System Card (USA) v2.0 を上流の固定名で置く。
+
+    git submodule update --init --recursive
+    .\build.ps1            # Release ビルド。初回は C 生成に約 12 分
+    .\build.ps1 -Test      # quick ラベル（約 20 秒）
+    .\build.ps1 -TestAll   # history 以外の全試験（約 11 分）
+    .\build.ps1 -TestHist  # history ラベル
+    .\build.ps1 -Package   # dist\YsRecomp\ と dist\YsRecomp.zip
+    ctest --test-dir build -C Release -R <name> --output-on-failure
+
+- ROM や BIOS がない試験は終了コード 77 で skip になる。skip は合格ではない。
+- 試験の期待値（PASS_REGULAR_EXPRESSION、セッション、カバレッジ）は北米版専用。日本版には使えない。
+
+### macOS
+- 現時点ではビルドできない。M2 / M3 の後に記入する。
+
+### 基準
+- 基準コミット：local_analysis/BASELINE_COMMIT.txt（7452c1b）
+- PCERecomp：local_analysis/BASELINE_SUBMODULES.txt（1b9d25a）
+
+## 報告
+- 文書と報告は日本語で書く。コード中のコメントと識別子は英語で書く。
+- 各 Phase の終了時に、変更ファイル一覧、git diff --stat、実行したコマンド、試験結果、
+  未実施の項目（特に Windows VM での確認待ち）、未解決事項を報告する。
+
+## セッション再開時
+最初に git status、git log --oneline -15、review_* 配下を確認し、
+現在の Phase と次の作業だけを報告する。確認が終わるまでファイルを変更しない。
