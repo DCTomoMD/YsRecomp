@@ -213,9 +213,16 @@ if(PYTHON_EXE)
     # All of the Ys code found through the disc map, without sessions; what the coverage sessions
     # executed must be in the analysis (the limit = what is still missing: 10 instructions of program $20;
     # 2 from 1-byte loads outside the map; must not grow)
-    add_test(NAME recomp_disc_ys COMMAND ${PYTHON_EXE} "${PCERECOMP_DIR}/tools/recomp/recomp.py" disc
-        "${SYSCARD2}" --cd "${YS_CUE}" --map "${CMAKE_SOURCE_DIR}/games/ys/disc.toml"
-        --check "${CMAKE_SOURCE_DIR}/games/ys/coverage" --limit 10 --limit-outside-map 2)
+    # (recomp.py has no skip of its own: without the BIOS or the disc, the test only says so and exits with 77)
+    if(EXISTS "${SYSCARD2}" AND EXISTS "${YS_CUE}")
+        add_test(NAME recomp_disc_ys COMMAND ${PYTHON_EXE} "${PCERECOMP_DIR}/tools/recomp/recomp.py" disc
+            "${SYSCARD2}" --cd "${YS_CUE}" --map "${CMAKE_SOURCE_DIR}/games/ys/disc.toml"
+            --check "${CMAKE_SOURCE_DIR}/games/ys/coverage" --limit 10 --limit-outside-map 2)
+    else()
+        add_test(NAME recomp_disc_ys COMMAND ${PYTHON_EXE} -c
+            "__import__('sys').exit(print('recomp_disc_ys: no disc or BIOS in roms (skipped, reconfigure after adding them)') or 77)")
+    endif()
+    set_tests_properties(recomp_disc_ys PROPERTIES SKIP_RETURN_CODE 77)
     # The game boots without the BIOS file (synthetic BIOS + BIOS routines in C)
     add_test(NAME nobios_ys COMMAND ${PYTHON_EXE} "${PCERECOMP_DIR}/tools/trace/run_nobios_test.py"
         $<TARGET_FILE:pce_trace> "${YS_CUE}" "${CMAKE_BINARY_DIR}/ys_output/sem_bios" 2500)

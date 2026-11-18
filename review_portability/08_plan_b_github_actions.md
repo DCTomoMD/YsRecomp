@@ -47,15 +47,29 @@
 
 - `build.ps1` の変更は PowerShell がないので macOS では実行していない [W]。
 
-## 4. push 後に Actions で確かめる点と期待される結果 [W]
+## 4. Actions での結果
+
+### 4.1 1 回目（2026-11-19、run `44380829997`、head `8dce8c5`）[C]
+
+- 構成・ビルド（head は build.ps1 `-VsPath`、base は同じ CMake のコマンド）、SDL3 のハッシュ、Python 3.10 の拒否、`rc.exe` と `check_rc.py`（M1 の前と同じ `.res`）は**すべて成功**。
+- 比較だけが不合格：head は 32 件で 14 合格・15 skip・3 失敗、base は 31 件。**M1 で新しく失敗した試験はない**（増えたのは `host_layers` で、合格）。
+- 失敗の 3 件はどれも前後で同じ：`cpu_huc6280`（登録済みの既知の失敗）と、理由が登録されていない 2 件：
+  - `recomp_disc_ys`：skip の仕組みがない。BIOS がないと `recomp.py` が `FileNotFoundError`（PCERecomp の `rom.py:40`）。
+  - `equip_ice_preview_ys`：`SKIP_RETURN_CODE 77` はあるが、スクリプトにディスクの有無の確認がない（兄弟の `equip_preview.py` にはある）。
+- 当初の見込み（ROM が必要な試験は定義されない）は誤り：`CMakeLists.txt:172-249` の試験は ROM がなくても定義され、77 で skip する。`cd_image` は 77 で skip した（B-3 は確認済み）。
+
+### 4.2 修正（ユーザーの決定：試験を直して 77 で skip する）
+
+- `tools/equip/equip_ice_preview.py`：`equip_preview.py` と同じ 3 行（ディスクか BIOS がなければ「skipped」と出して 77）。
+- `CMakeLists.txt`：`recomp_disc_ys` は、構成時に BIOS とディスクがあれば今と同じコマンド、なければ同じ名前で「skipped」と出して 77 で終わる。`SKIP_RETURN_CODE 77` を付けた。`recomp.py`（PCERecomp）は変更していない。
+  - 構成時に決まるので、ROM を後から置いたら構成し直す必要がある（`YsRecomp` のターゲットと同じ）。
+- macOS で確かめた [C]：`recomp_disc_ys` が `Skipped`、`equip_ice_preview.py` が終了コード 77、`host_layers`・`check_layers` は合格。ROM があるときのコマンドが変わっていないことは、A 案で確かめる [W]。
+
+### 4.3 2 回目に期待される結果 [W]
 
 - ジョブ `windows-x64` が緑。
-- Summary の表で、`head` は次のとおり [A]（`ctest_report.py` が数を出す）：
-  - passed（実行）：`app_config`、`app_volume`、`app_menu`、`app_video`、`app_image`、`app_crop`、`app_redraw`、`app_fade`、`app_launcher`、`app_input`、`host_layers`（new test）、`pce_memory_io`、`recomp_python`、`tools`
-  - skipped（77）：`app_disc_id`、`app_cd_menu_music`（ディスクなし）、`cd_image`（`gg_cdinfo.exe` なし）
-  - failed：`cpu_huc6280` のみ（known failure (both)）
-  - `base` も同じで、`host_layers` がないだけ。
-- 「SDL3-3.2.30.tar.gz SHA256 = `4C3B…2E3D` (expected)」、「Python check: 3.10 refused …」、「Resources: … is the same as before M1」の 3 行が Summary に出る。
+- head：14 合格、17 skip（77）、1 失敗（`cpu_huc6280`、known failure (both)）。`recomp_disc_ys` と `equip_ice_preview_ys` は base で fail、head で skip と表示される（不合格の理由にはならない）。
+- Summary に SDL3 のハッシュ、Python 3.10 の拒否、Resources が同じ、の 3 行。
 - 想定と違う場合：artifact `windows-ci-<sha>` の `head_build.log`、`head_tests.log` を見る。
 
 ## 5. この CI で確かめられないもの
@@ -70,4 +84,4 @@
 |---|---|
 | B-1 | `windows-2022` の runner が将来なくなった場合（VS 2022 が入った image を選び直す） |
 | B-2 | `.gitmodules` の URL をフォークに替えたら（D1）、そのフォークが公開されていないと `submodules: recursive` が失敗する |
-| B-3 | `cd_image` が 77 で skip することは [A]（`run_cd_test.py:151-153` を読んだだけ） |
+| B-3 | （解決）`cd_image` は CI で 77 で skip した（`gg_cdinfo.exe` なし） |
