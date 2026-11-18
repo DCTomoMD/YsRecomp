@@ -1,0 +1,207 @@
+# Windows x64 (MSVC): configure, build and run the tests that need no disc, for the commit under test and for a
+# baseline commit, one after the other on the same runner, then compare the two test runs
+# (tools/ci/ctest_report.py): a new failure, a lost test or a pass turned into a skip rejects the run.
+# Also: the Python version check of CMakeLists.txt (an old Python must be refused), the SDL3 download hash, and the
+# player's resources (.rc and .ico) compiled on their own with rc.exe (without the disc, CMake does not create the
+# YsRecomp target, so the normal build never compiles the .rc).
+# No disc, BIOS or data taken from them is used or stored here: tests that need them exit with 77 (skipped) and are
+# listed apart, since a skip is not a pass.
+# Actions are pinned to commit SHAs (the tag in the comment).
+name: windows-ci
+
+on:
+  push:
+    branches: ['master', 'ci/**', 'feature/**']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: 'Baseline commit (full SHA) to compare with'
+        required: false
+        default: '06b62c61845d1f74436c103461ce01a93e3628c1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Before M1 (Phase 2 done): the last commit whose Windows behaviour is known
+  BASE_SHA: ${{ github.event.inputs.base_sha || '06b62c61845d1f74436c103461ce01a93e3628c1' }}
+  SDL3_SHA256: 4c3b09330d866dc52eb65b66259a6684ad387252ca8c57901b3a2b534eb42e3d
+
+jobs:
+  windows-x64:
+    # Visual Studio 2022 (the "Visual Studio 17 2022" generator of build.ps1)
+    runs-on: windows-2022
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          path: head
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Check out the baseline commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          path: base
+          ref: ${{ env.BASE_SHA }}
+          submodules: recursive
+          persist-credentials: false
+
+      # The patterns of .gitignore's "protected content" (the sessions' .brm saves are versioned upstream on purpose)
+      - name: No disc, BIOS or generated code in the repository
+        run: |
+          $bad = @()
+          foreach ($tree in 'head', 'base') {
+            $bad += git -C $tree ls-files | Where-Object { $_ -match '(?i)\.(cue|bin|iso|pce|img|chd)$|(^|/)syscard' }
+            $bad += git -C $tree ls-files roms games/ys/generated | Where-Object { $_ -ne 'roms/README.md' }
+          }
+          if ($bad) { $bad | ForEach-Object { Write-Host "versioned: $_" }; throw 'Disc-derived files are versioned' }
+          Write-Host 'No disc-derived files versioned.'
+
+      - name: Python 3.10 (only to check that CMake refuses it)
+        id: py_old
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: '3.10'
+
+      - name: Python 3.14 (the one the project uses)
+        id: py
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: '3.14'
+
+      - name: Find Visual Studio 2022 and its CMake
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $vs = & $vswhere -version '[17.0,18.0)' -products * -latest `
+                  -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'Visual Studio 2022 with the C++ tools not found' }
+          $bin = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin'
+          if (-not (Test-Path (Join-Path $bin 'cmake.exe'))) { throw "CMake not found in $bin" }
+          "VS_PATH=$vs" >> $env:GITHUB_ENV
+          "VS_CMAKE=$(Join-Path $bin 'cmake.exe')" >> $env:GITHUB_ENV
+          "VS_CTEST=$(Join-Path $bin 'ctest.exe')" >> $env:GITHUB_ENV
+          New-Item -ItemType Directory -Force ci_out | Out-Null
+          "CI_OUT=$((Resolve-Path ci_out).Path)" >> $env:GITHUB_ENV
+          Write-Host "Visual Studio: $vs"
+          & (Join-Path $bin 'cmake.exe') --version | Select-Object -First 1
+          python --version
+          Write-Host "head: $(git -C head rev-parse HEAD)  base: $(git -C base rev-parse HEAD)"
+          Write-Host "PCERecomp head: $(git -C head/external/PCERecomp rev-parse HEAD)  base: $(git -C base/external/PCERecomp rev-parse HEAD)"
+
+      # The commit under test goes through build.ps1 itself (-VsPath: the runner has Enterprise, not the Build Tools)
+      - name: Build the commit under test (build.ps1)
+        working-directory: head
+        run: |
+          & .\build.ps1 -VsPath $env:VS_PATH -Verbose *>&1 | Tee-Object -FilePath "$env:CI_OUT\head_build.log" | Out-Null
+          $warn = Select-String -Path "$env:CI_OUT\head_build.log" -Pattern 'warning C\d|error|: fatal'
+          $warn | Select-Object -First 60 | ForEach-Object { Write-Host $_.Line }
+          if (-not (Test-Path build\Release\app_tests.exe)) { throw 'Build failed (no app_tests.exe)' }
+
+      # The baseline's build.ps1 has the Build Tools folder fixed: the same commands with the same CMake instead
+      - name: Build the baseline commit (the same CMake commands as build.ps1)
+        if: ${{ !cancelled() }}
+        working-directory: base
+        run: |
+          & $env:VS_CMAKE -S . -B build -G 'Visual Studio 17 2022' -A x64 *>&1 | Tee-Object -FilePath "$env:CI_OUT\base_build.log" | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Baseline configuration failed' }
+          & $env:VS_CMAKE --build build --config Release --parallel *>&1 | Tee-Object -FilePath "$env:CI_OUT\base_build.log" -Append | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Baseline build failed' }
+
+      - name: Run the tests of both commits
+        if: ${{ !cancelled() }}
+        run: |
+          # Same options as build.ps1 -TestAll (half the cores, a failure runs once more), every defined test
+          $jobs = [Math]::Max(1, [int]([Environment]::ProcessorCount / 2))
+          foreach ($tree in 'base', 'head') {
+            if (-not (Test-Path "$tree\build\CTestTestfile.cmake")) { Write-Host "${tree}: not built"; continue }
+            & $env:VS_CTEST --test-dir "$tree\build" -C Release -j $jobs --repeat until-pass:2 --output-on-failure `
+                --output-junit "$env:CI_OUT\${tree}_tests.xml" *>&1 | Tee-Object -FilePath "$env:CI_OUT\${tree}_tests.log" | Out-Null
+            Write-Host "== $tree (ctest exit code $LASTEXITCODE)"
+            Select-String -Path "$env:CI_OUT\${tree}_tests.log" -Pattern 'tests passed|\*\*\*Failed|\*\*\*Exception|\*\*\*Timeout|Not Run|Skipped|^\s+\d+ - ' |
+              ForEach-Object { Write-Host $_.Line }
+          }
+          $global:LASTEXITCODE = 0
+
+      - name: Compare the test runs
+        if: ${{ !cancelled() }}
+        run: |
+          python head\tools\ci\ctest_report.py --base "$env:CI_OUT\base_tests.xml" --head "$env:CI_OUT\head_tests.xml" `
+            --base-name "base $($env:BASE_SHA.Substring(0,7))" --head-name "head $($env:GITHUB_SHA.Substring(0,7))" `
+            --known-fail 'cpu_huc6280=needs reference/huc6280-tests (not in Git; R21), exits with 2, not 77' `
+            --require-pass host_layers `
+            --summary $env:GITHUB_STEP_SUMMARY
+          if ($LASTEXITCODE -ne 0) { throw 'Test comparison rejected' }
+
+      - name: SDL3 download hash
+        if: ${{ !cancelled() }}
+        run: |
+          # Both downloads, for the record (the baseline used GitHub's tag archive, without a hash)
+          foreach ($tree in 'head', 'base') {
+            Get-ChildItem -Recurse -File "$tree\build\_deps" -Filter '*.tar.gz' -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host "${tree}: $($_.Name) $((Get-FileHash $_.FullName -Algorithm SHA256).Hash)" }
+          }
+          # The head configuration already failed if the hash differed (URL_HASH); this shows it again
+          $head = Get-ChildItem -Recurse -File head\build\_deps -Filter 'SDL3-3.2.30.tar.gz' | Select-Object -First 1
+          if (-not $head) { throw 'SDL3-3.2.30.tar.gz not found in head\build\_deps' }
+          $hash = (Get-FileHash $head.FullName -Algorithm SHA256).Hash
+          if ($hash -ne $env:SDL3_SHA256.ToUpper()) { throw "SDL3 hash $hash differs from $env:SDL3_SHA256" }
+          "SDL3-3.2.30.tar.gz SHA256 = ``$hash`` (expected)" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: CMake refuses Python older than 3.11
+        if: ${{ !cancelled() }}
+        working-directory: head
+        run: |
+          $sdl = Resolve-Path build\_deps\sdl3-src
+          $old = '${{ steps.py_old.outputs.python-path }}'
+          & $old --version
+          # The SDL3 sources already downloaded are reused (no second download)
+          & $env:VS_CMAKE -S . -B "$env:RUNNER_TEMP\py_old_build" -G 'Visual Studio 17 2022' -A x64 `
+              "-DPYTHON_EXE=$old" "-DFETCHCONTENT_SOURCE_DIR_SDL3=$sdl" *>&1 | Tee-Object -FilePath "$env:CI_OUT\py_old_configure.log" | Out-Null
+          $rc = $LASTEXITCODE
+          $msg = Select-String -Path "$env:CI_OUT\py_old_configure.log" -Pattern 'Python 3.11 or later needed'
+          Write-Host "configure exit code: $rc"
+          $msg | ForEach-Object { Write-Host $_.Line }
+          if ($rc -eq 0 -or -not $msg) { throw 'CMake accepted Python 3.10' }
+          $used = Select-String -Path build\CMakeCache.txt -Pattern '^PYTHON_EXE:'
+          Write-Host "head build used: $($used.Line)"
+          "Python check: 3.10 refused at configuration; build used ``$($used.Line)``" >> $env:GITHUB_STEP_SUMMARY
+          $global:LASTEXITCODE = 0
+
+      - name: Compile the player's resources (.rc and .ico) with rc.exe
+        if: ${{ !cancelled() }}
+        run: |
+          & (Join-Path $env:VS_PATH 'Common7\Tools\Launch-VsDevShell.ps1') -Arch amd64 -HostArch amd64 -SkipAutomaticLocation | Out-Null
+          # Run from another folder with the .rc's full path, as the build does: the .ico is found next to the .rc
+          Set-Location $env:RUNNER_TEMP
+          $rcs = @{ base = "$env:GITHUB_WORKSPACE\base\runtime\app\ysrecomp.rc";
+                    head = "$env:GITHUB_WORKSPACE\head\runtime\host\win\ysrecomp.rc" }
+          foreach ($tree in 'base', 'head') {
+            & rc.exe /nologo /fo "$env:CI_OUT\${tree}_ysrecomp.res" $rcs[$tree]
+            if ($LASTEXITCODE -ne 0) { throw "rc.exe failed on $($rcs[$tree])" }
+          }
+          python "$env:GITHUB_WORKSPACE\head\tools\ci\check_rc.py" --res "$env:CI_OUT\base_ysrecomp.res" `
+              --ico "$env:GITHUB_WORKSPACE\base\runtime\app\ysrecomp.ico"
+          if ($LASTEXITCODE -ne 0) { throw 'Baseline resources wrong' }
+          python "$env:GITHUB_WORKSPACE\head\tools\ci\check_rc.py" --res "$env:CI_OUT\head_ysrecomp.res" `
+              --ico "$env:GITHUB_WORKSPACE\head\runtime\host\win\ysrecomp.ico" --compare "$env:CI_OUT\base_ysrecomp.res"
+          if ($LASTEXITCODE -ne 0) { throw 'Resources of the commit under test wrong or different from the baseline' }
+          'Resources: `runtime/host/win/ysrecomp.rc` compiles, holds the .ico and is the same as before M1' >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Keep the logs and test results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: windows-ci-${{ github.sha }}
+          path: ci_out
+          retention-days: 14
+          if-no-files-found: warn

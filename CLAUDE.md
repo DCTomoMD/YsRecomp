@@ -281,6 +281,11 @@ roms/ 直下に北米版の cue と bin 43 本、System Card (USA) v2.0 を上�
 - OS の差は `cmake/platform_{windows,macos}.cmake` と `runtime/host/{win,null,common}` に置く。
   層の規則は試験 `host_layers`（`tools/check_layers.py`、quick）が確かめる。
 
+### CI（GitHub Actions、Windows x64）
+- `.github/workflows/windows-ci.yml`：試験対象のコミットと基準（`06b62c6`）を同じ runner でビルドし、ROM 不要の試験を
+  比べる（`tools/ci/ctest_report.py`。77 の skip は別に数える）。`.rc` は `rc.exe` で単独に確かめる（`tools/ci/check_rc.py`）。
+  build.ps1 の `-VsPath` は CI 用（省略時は今と同じ）。詳細：review_portability/08_plan_b_github_actions.md。
+
 ### 基準
 - 基準コミット：local_analysis/BASELINE_COMMIT.txt（7452c1b）
 - PCERecomp：local_analysis/BASELINE_SUBMODULES.txt（1b9d25a）

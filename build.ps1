@@ -8,13 +8,16 @@
 #        .\build.ps1 -Package   -> build, test the package ("package" group) and assemble the player package in
 #                                  dist\ (YsRecomp\ and YsRecomp.zip)
 #        -Verbose               -> show everything (full build and test output)
+#        -VsPath FOLDER         -> another Visual Studio 2022 installation (the CI's Enterprise, found with
+#                                  vswhere); without it, the Build Tools in their usual folder
 # Without -Verbose, only build warnings and errors and the test summary (how many passed and which
 # failed) are shown. To see the output of a failed test:
 #   ctest --test-dir build -C Release -R <name> --output-on-failure
-param([switch]$Test, [switch]$TestAll, [switch]$TestHist, [switch]$Package, [switch]$Verbose)
+param([switch]$Test, [switch]$TestAll, [switch]$TestHist, [switch]$Package, [switch]$Verbose,
+      [string]$VsPath = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools')
 $ErrorActionPreference = 'Stop'
 
-$vs = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools'
+$vs = $VsPath
 $cmake = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
 $ctest = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe'
 if (-not (Test-Path $cmake)) { throw "CMake not found at $cmake" }

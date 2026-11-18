@@ -97,7 +97,7 @@ build.ps1 と同じ手順（構成がなければ構成 → Release のビルド
 ## 5. Windows VM での確認手順
 
 - VM の作り方（Windows 11 ARM 版、画面イメージ付き）、M1 の前（`06b62c6`）との比べ方、チェックポイント C1〜C10、この確認に戻るときのプロンプト：`07_plan_a_windows_arm_vm.pdf`（A 案）。
-- VM の用意ができるまでは、GitHub Actions の Windows で ROM 不要の範囲を確かめる（B 案、ブランチ `ci/windows-github-actions`）。
+- VM の用意ができるまでは、GitHub Actions の Windows で ROM 不要の範囲を確かめる（B 案、ブランチ `ci/windows-github-actions`、`08_plan_b_github_actions.md`）。
 
 前提：これまでと同じ（VS 2022 Build Tools、Python 3.14、`roms/` 直下に上流の固定名の北米版 cue・bin と System Card 2.0）。SDL3 の URL が変わったので、**`build\` を消してから**行う（FetchContent が新しい URL から取り直す。生成 C は `games\ys\generated\` にあり、`disc.toml` と生成器が変わっていないので作り直されない見込み [A]）。
 
