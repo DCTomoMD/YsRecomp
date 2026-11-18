@@ -48,6 +48,10 @@ dist/
 # check_all_sessions.py results (depend on the code version)
 *.conferencia
 
+# macOS metadata (AppleDouble files from exFAT/SMB/zip, Finder folder settings)
+._*
+.DS_Store
+
 # Original icon drawing (JPEG 2048x2048; the art read from it lives in tools/package/make_icon.py)
 docs/Icone_novo.png
 
