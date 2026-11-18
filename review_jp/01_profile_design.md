@@ -23,7 +23,10 @@
 | P7 | 日本版のデータは **`games/ys_jp/`** に置く（`games/ys/` は触らない） | `02_build_layout.md` |
 | P8 | 文書は版（review_jp）と OS（review_portability）で分ける | 本書と 05、02 |
 | D11 | （M0）日米は**別の実行ファイル** | 生成コードの `recomp_lookup` の衝突は起きない（別リンク）[A] |
-| P9 | 日本版の実行ファイルの名前は **`YsIandII_JP`**（2026-11-19 追加） | 7 章。`app_id`、ini 名（`YsIandII_JP.ini`）、試験・パッケージの名前もこれに合わせる。ウィンドウのタイトルは Q1 で未決 |
+| P9 | 日本版の実行ファイルの名前は **`YsIandII_JP`**（2026-11-19 追加） | 7 章。`app_id`、ini 名（`YsIandII_JP.ini`）、試験・パッケージの名前もこれに合わせる。ウィンドウのタイトルは P10 |
+| P10 | （Q1）日本版のウィンドウのタイトルは **`Ys I & II (Japan)`**（2026-11-19、Phase 2 の前） | 7 章 |
+| P11 | （Q2）日本版のランチャーは**北米版と同じ表示**（2026-11-19） | 7 章 |
+| P12 | （Q3）**BIOS なしの日本版は目標から外す**。日本版は恒久的に実 BIOS 必須（2026-11-19） | 6.3 章 |
 
 ---
 
@@ -226,7 +229,7 @@ extern const YsProfile g_ys_profile;   /* defined by exactly one of profile_usa.
 | イントロの短縮 | 無効（BIOS ありでは今も無効 [C]。System Card の画面が先に出るため） |
 | ランチャーの効果音の取り出し | 無効。実 BIOS で取り出す方法は Phase 3 以降に設計する（`launcher_sound.c` は合成 BIOS 固定 [C]） |
 | `nobios_*` 系の試験 | 日本版には作らない（P1） |
-| BIOS なしの日本版 | Phase 2 以降の課題。案：ユーザーの BIOS ファイルから実行時にフォントだけを読む。これは PCERecomp の HLE に手を入れる可能性が高く、D1（フォークで管理）の手順に従ってユーザーが決める |
+| BIOS なしの日本版 | **目標から外した（P12）**。PCERecomp の HLE フォントは変えない |
 
 ---
 
@@ -235,13 +238,13 @@ extern const YsProfile g_ys_profile;   /* defined by exactly one of profile_usa.
 | 項目 | 北米版（今の値 [C]） | 日本版 |
 |---|---|---|
 | 実行ファイル名 | `YsRecomp` | `YsIandII_JP`（ユーザーの決定 P9） |
-| ウィンドウのタイトル | `"Ys Book I & II"`（`main.c:161`） | 案：`"Ys I & II (Japan)"`（ASCII。ユーザーの確認が必要） |
+| ウィンドウのタイトル | `"Ys Book I & II"`（`main.c:161`） | `"Ys I & II (Japan)"`（ASCII。P10 で決定） |
 | ini のファイル名 | `YsRecomp.ini`（`main.c:2555`） | `YsIandII_JP.ini`（P9 の名前に合わせた案） |
 | 書き込み先 | 実行ファイルの隣（Windows）。macOS は `Application Support/<app_id>`（D3） | 同じ規則で別のフォルダ。版の名前は host に文字列で渡す（`05` の 3 章） |
 | `saves/`、`sessions/`、`menu_font.bin`、`launcher_sfx.bin` | ini のあるフォルダ（`main.c:245, 2592, 2596, 2019, 2761`） | 日本版の ini のあるフォルダ。北米版とは混ざらない |
 | ディスク・BIOS を選ぶときの文言 | `"(USA)"` を含む英語（`main.c:182, 218-220`、`disc_id.c:121-142`） | 英語（P6）。文言は `YsIdentity` に置く |
 | メニュー・ランチャーの言語 | 英語（`docs/ROADMAP.md:17`） | 英語（P6）。日本語化は将来の課題として分ける |
-| ランチャーの表示 | 3 作のカバーと発売年（`launcher.c:9-14`） | 同じでよいか、日本版の表示にするかは Phase 3B で決める（画像はユーザーのもので、Git には入れない） |
+| ランチャーの表示 | 3 作のカバーと発売年（`launcher.c:9-14`） | 北米版と同じ（P11。画像はユーザーのもので、Git には入れない） |
 | `.rc`／Info.plist の製品名・アイコン | `ysrecomp.rc:5, 17-27` | CMake の `configure_file` に版の変数を渡して作る（`05` の 5 章） |
 | セッションのヘッダー | `# Session recorded by YsRecomp ...`、`# game:`、`# bios:`（`main.c:484-487`） | 8 章 |
 
@@ -276,6 +279,8 @@ extern const YsProfile g_ys_profile;   /* defined by exactly one of profile_usa.
 
 ## 10. UNKNOWN（Phase 2 で確定させるもの）
 
+> Phase 2 の結果（どれが確定したか）は `review_jp/03_disc_analysis.md` の 11 章。本表は Phase 1 時点の記録として残す。
+
 | # | 内容 | 使う profile のフィールド | 関係する `review_jp/00` の項目 |
 |---|---|---|---|
 | U1 | 日本版の CUE と BIN の構成、FILE 名の文字コード | `disc` | J1、R16 |
@@ -296,6 +301,6 @@ extern const YsProfile g_ys_profile;   /* defined by exactly one of profile_usa.
 
 | ID | 内容 |
 |---|---|
-| Q1 | 日本版のウィンドウのタイトル（7 章の案：`"Ys I & II (Japan)"`）。実行ファイル名は `YsIandII_JP` に決定（P9） |
-| Q2 | 日本版のランチャーの表示（北米版と同じ 3 作のカバーか、日本版向けか） |
-| Q3 | BIOS なしの日本版を目標に残すか（6.3。PCERecomp の変更を伴う可能性が高い → D1 の手順） |
+| Q1 | 日本版のウィンドウのタイトル → **決定済み（P10）** |
+| Q2 | 日本版のランチャーの表示 → **決定済み（P11）** |
+| Q3 | BIOS なしの日本版を目標に残すか → **決定済み（P12：外す）** |
