@@ -5,8 +5,8 @@ RAM, CD RAM) with a reference recorded before the optimizations. Also shows fram
     python tools/trace/run_perf_check.py --save REF   records the reference (before changing anything)
     python tools/trace/run_perf_check.py --check REF  checks against it (afterwards)
 
-Options: --exe (default build/Release/ys_trace.exe), --cue, --bios <system card> (real BIOS instead of the C
-routines), --frames N (cuts each session at N frames), --only <part of the name>.
+Options: --exe (default build/Release/ys_trace, .exe on Windows), --cue, --bios <system card> (real BIOS
+instead of the C routines), --frames N (cuts each session at N frames), --only <part of the name>.
 Without the disc: exits with 77 (skipped).
 """
 import argparse
@@ -20,6 +20,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+import build_paths  # noqa: E402
 
 
 def session_frames(path):
@@ -73,7 +75,7 @@ def main():
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument("--save")
     mode.add_argument("--check")
-    ap.add_argument("--exe", default=os.path.join(ROOT, "build", "Release", "ys_trace.exe"))
+    ap.add_argument("--exe", default=build_paths.exe("ys_trace"))
     ap.add_argument("--cue", default=os.path.join(ROOT, "roms", "Ys Book I & II (USA).cue"))
     ap.add_argument("--bios")
     ap.add_argument("--frames", type=int)

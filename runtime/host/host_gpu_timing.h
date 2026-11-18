@@ -1,7 +1,8 @@
 /* GPU time of each image (only with --frame-timing): Direct3D 11 timestamps (the SDL renderer on Windows), read a
- * few images later so as not to wait for the GPU. Outside Direct3D 11, nothing. */
-#ifndef PCE_APP_GPU_TIME_H
-#define PCE_APP_GPU_TIME_H
+ * few images later so as not to wait for the GPU. Without an implementation for this OS, nothing.
+ * Host layer: the OS implementation is chosen by CMake (host/win, host/null). */
+#ifndef PCE_HOST_GPU_TIMING_H
+#define PCE_HOST_GPU_TIMING_H
 
 #include <SDL3/SDL.h>
 

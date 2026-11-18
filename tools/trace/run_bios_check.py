@@ -17,7 +17,9 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
-EXE = os.path.join(ROOT, "build", "Release", "bios_check.exe")
+sys.path.insert(0, os.path.dirname(HERE))
+import build_paths  # noqa: E402
+EXE = build_paths.exe("bios_check")
 
 
 def read_header(path):

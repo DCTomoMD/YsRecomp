@@ -49,7 +49,7 @@ def files(root):
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d != "__pycache__"]
         for f in filenames:
-            if f.endswith(".py"):
+            if f.endswith(".py") and not f.startswith("."):  # no macOS ._* files
                 found.add(os.path.relpath(os.path.join(dirpath, f), root))
     return found
 

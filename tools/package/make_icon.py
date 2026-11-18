@@ -4,7 +4,7 @@ pixel by pixel from the color at the center of each cell, with similar colors me
 
 Sizes (integer scaling, sharp pixels): 256 (sprite 14x), 48 (2x) and 24 (1x) with the whole body; 32
 (2x) and 16 (1x) with only the face (the whole body is unreadable that small). The 256 one as PNG, the others as
-BMP, as Windows expects. Output: runtime/app/ysrecomp.ico. With --preview FILE.png also writes a preview of each
+BMP, as Windows expects. Output: runtime/host/win/ysrecomp.ico. With --preview FILE.png also writes a preview of each
 size, side by side.
 
 Usage: python tools/package/make_icon.py [--preview preview.png]
@@ -114,7 +114,7 @@ def ico():
 
 def main():
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    path = os.path.join(root, "runtime", "app", "ysrecomp.ico")
+    path = os.path.join(root, "runtime", "host", "win", "ysrecomp.ico")
     with open(path, "wb") as f:
         f.write(ico())
     print(f"Wrote {path}")

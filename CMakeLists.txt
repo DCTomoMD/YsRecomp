@@ -4,17 +4,22 @@ project(YsRecomp C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-if(MSVC)
-    add_compile_options(/W4 /utf-8)
-    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
-    # .pdb in Release too, so the profiler (pce_trace --profile) can name the functions.
-    # Does not change the generated code; /OPT:REF,ICF keeps the .exe the same size as before.
-    add_compile_options($<$<CONFIG:Release>:/Zi>)
-    add_link_options($<$<CONFIG:Release>:/DEBUG> $<$<CONFIG:Release>:/OPT:REF> $<$<CONFIG:Release>:/OPT:ICF>)
-    # C library inside the .exe (/MT), everywhere (SDL included): YsRecomp.exe runs on a Windows without the
-    # "Visual C++ Redistributable" package installed.
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    enable_language(RC)
+# Single-configuration generators (Ninja, Makefiles): Release unless chosen otherwise. The multi-configuration ones
+# (Visual Studio, Ninja Multi-Config) pick it at build time (--config Release).
+get_property(YS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(NOT YS_MULTI_CONFIG AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+# Operating system: compiler flags, host layer sources (runtime/host), generated-code flags and the executable's
+# resources. Each file defines PLATFORM_HOST_SOURCES, PLATFORM_HOST_LIBRARIES, platform_generated_code(target) and
+# platform_app_executable(target). Edition (USA / JP) differences never go there.
+if(WIN32)
+    include(cmake/platform_windows.cmake)
+elseif(APPLE)
+    include(cmake/platform_macos.cmake)
+else()
+    message(FATAL_ERROR "Unsupported platform: ${CMAKE_SYSTEM_NAME} (Windows and macOS only: cmake/platform_*.cmake)")
 endif()
 
 # All .exe files in build\Release (PCERecomp's too), where the scripts look for them.
@@ -48,8 +53,10 @@ include(FetchContent)
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+# The official release file, with its SHA256 as published on the release page (checked on download).
 FetchContent_Declare(SDL3
-    URL https://github.com/libsdl-org/SDL/archive/refs/tags/release-3.2.30.tar.gz
+    URL https://github.com/libsdl-org/SDL/releases/download/release-3.2.30/SDL3-3.2.30.tar.gz
+    URL_HASH SHA256=4c3b09330d866dc52eb65b66259a6684ad387252ca8c57901b3a2b534eb42e3d
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
 FetchContent_MakeAvailable(SDL3)
 
@@ -72,7 +79,6 @@ add_library(pce_app STATIC
     runtime/app/intro_skip.c
     runtime/app/video.c
     runtime/app/pacing.c
-    runtime/app/vblank.c
     runtime/app/present.c
     runtime/app/redraw.c
     runtime/app/equip.c
@@ -80,19 +86,17 @@ add_library(pce_app STATIC
     runtime/app/game_fixes.c
     runtime/app/motion.c runtime/app/ys_masks.c
     runtime/app/gpu_draw.c
-    runtime/app/gpu_time.c
     runtime/app/ys_engine.c
     runtime/app/ys_windows.c runtime/app/ys_scroll.c runtime/app/ys_screen.c runtime/app/ys_music.c runtime/app/ys_dialog.c runtime/app/ys_intro.c runtime/app/ys_fade.c runtime/app/ys_panel.c runtime/app/ys_reward.c
     runtime/app/crop.c
     runtime/app/fade.c
     runtime/app/launcher.c
     runtime/app/launcher_sound.c
-    runtime/app/launcher_image.c)
+    runtime/app/launcher_image.c
+    runtime/host/common/host_paths_sdl.c
+    ${PLATFORM_HOST_SOURCES})
 target_include_directories(pce_app PUBLIC runtime)
-target_link_libraries(pce_app PUBLIC pce_core SDL3::SDL3-static)
-if(WIN32)
-    target_link_libraries(pce_app PUBLIC dwmapi)
-endif()
+target_link_libraries(pce_app PUBLIC pce_core SDL3::SDL3-static ${PLATFORM_HOST_LIBRARIES})
 # Launcher: the user's JPG images, decoded with the stb_image bundled in the SDL sources
 set_source_files_properties(runtime/app/launcher_image.c PROPERTIES INCLUDE_DIRECTORIES "${sdl3_SOURCE_DIR}/src/video")
 
@@ -142,6 +146,20 @@ set_tests_properties(app_cd_menu_music PROPERTIES SKIP_RETURN_CODE 77)
 
 
 find_program(PYTHON_EXE NAMES python python3)
+# The recompiler and the tools read TOML with tomllib (Python 3.11 or later)
+if(PYTHON_EXE)
+    execute_process(COMMAND "${PYTHON_EXE}" -c "import sys; print('%d.%d' % sys.version_info[:2])"
+        OUTPUT_VARIABLE YS_PYTHON_VERSION RESULT_VARIABLE YS_PYTHON_RC OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT YS_PYTHON_RC EQUAL 0 OR YS_PYTHON_VERSION VERSION_LESS 3.11)
+        message(FATAL_ERROR "Python 3.11 or later needed (tomllib): ${PYTHON_EXE} gave '${YS_PYTHON_VERSION}'. "
+            "Choose another one with -DPYTHON_EXE=...")
+    endif()
+    # Dependency rules between the layers: common code without OS #ifdefs, host without the game, PCERecomp
+    # without the game (review_portability/05_host_layer_design.md, chapter 7)
+    add_test(NAME host_layers COMMAND ${PYTHON_EXE} "${CMAKE_SOURCE_DIR}/tools/check_layers.py"
+        --pcerecomp "${PCERECOMP_DIR}")
+    set_tests_properties(host_layers PROPERTIES PASS_REGULAR_EXPRESSION "check_layers: OK")
+endif()
 
 
 
@@ -258,9 +276,7 @@ if(PYTHON_EXE AND EXISTS "${YS_CUE}" AND EXISTS "${SYSCARD2}")
     # No LTCG for the generated C (~40 MB): with it, every link of ys_trace/YsRecomp recompiled the whole game (~10 min
     # per .exe, even when touching only the runtime). The game's code is ~1% of the time; the hardware keeps LTCG.
     set_target_properties(ys_recomp PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF)
-    if(MSVC)
-        target_compile_options(ys_recomp PRIVATE /W1 /bigobj /MP)  # /MP: the 24 parts in parallel
-    endif()
+    platform_generated_code(ys_recomp)
 
     # Equipment on Adol (runtime/app/equip.h): Adol's 36 frames taken from the disc (session with the BIOS) by
     # pce_trace; generated C outside Git, like the game's. Only redone when the generator or the session changes (pce_trace
@@ -293,9 +309,7 @@ if(PYTHON_EXE AND EXISTS "${YS_CUE}" AND EXISTS "${SYSCARD2}")
     # The game for the player. Without arguments: asks for the bin/cue folder the first time and keeps the
     # configuration and the save next to the .exe (YsRecomp.ini, saves/). Accepts pce_runtime's arguments.
     add_executable(YsRecomp runtime/main.c)
-    if(WIN32)
-        target_sources(YsRecomp PRIVATE runtime/app/ysrecomp.rc)
-    endif()
+    platform_app_executable(YsRecomp)
     target_compile_definitions(YsRecomp PRIVATE PCE_RECOMP PCE_APP_YS)
     # Launcher: without launcher/ next to the .exe, the images in docs/
     target_compile_definitions(YsRecomp PRIVATE "PCE_DOCS_DIR=\"${CMAKE_SOURCE_DIR}/docs\"")
@@ -823,7 +837,7 @@ endif()
 # touch the console or the recompiler. Tests of the same session run together in a single run.
 set(TESTS_QUICK app_config app_volume app_menu app_video app_image app_crop
     app_redraw app_fade app_input app_disc_id app_cd_menu_music app_start_ys nobios_ys app_launcher equip_c_ys
-    app_mark_ys)
+    app_mark_ys host_layers)
 set(TESTS_CONSOLE trace_ys_boot trace_ys_run session_ys_boot session_ys_game session_ys_save fade_ys
     coverage_ys bios_c_ys hle_timing_ys nobios_cabin_ys equip_preview_ys equip_ice_preview_ys game_windows_ys windows_ys1 windows_crop_ys
     panel_ys)

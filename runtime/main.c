@@ -100,9 +100,11 @@
 #include "app/volume.h"
 #endif
 #include "app/pacing.h"
-#include "app/gpu_time.h"
+#include "host/host_gpu_timing.h"
 #include "app/present.h"
-#include "app/vblank.h"
+#include "host/host_display_timing.h"
+#include "host/host_paths.h"
+#include "host/host_process.h"
 #include "app/video.h"
 
 /* One PC-Engine frame: 1365 x 262 cycles of a 21.477270 MHz clock. */
@@ -1291,7 +1293,7 @@ static DrawCost g_draw_cost[14]; /* 8-12: the parts of "crop, fade, texture"; 13
 static long g_heavy_ms[16];      /* the image with the new frame, per whole ms */
 static long g_heavy_lead[16], g_heavy_steps[5]; /* it in the plan: ms from the start to the refresh; refreshes */
 static long g_present_ms[16];    /* how long SDL_RenderPresent held the window (all images) */
-static int g_gpu_time;           /* --frame-timing with Direct3D 11: GPU time of each image (app/gpu_time.h) */
+static int g_gpu_time;           /* --frame-timing with Direct3D 11: GPU time of each image (host/host_gpu_timing.h) */
 
 static void draw_cost_add(DrawCost *c, Uint64 ns)
 {
@@ -1944,7 +1946,7 @@ static const char *const k_launcher_images[1 + LAUNCHER_GAMES] = { "Ys Logo.jpg"
 
 static void launcher_load_images(Launcher *L)
 {
-    const char *exe = SDL_GetBasePath();
+    const char *exe = host_resource_dir();
     for (int i = 0; i <= LAUNCHER_GAMES; i++) {
         char path[1024];
         uint32_t *px = NULL;
@@ -2542,6 +2544,7 @@ int main(int argc, char **argv)
         else
             rom_path = argv[i];
     }
+    host_paths_init("YsRecomp"); /* the edition's app id comes from the profile (Phase 3B) */
 
 #ifdef PCE_APP_YS
     if (!rom_path && !bios_path) {
@@ -2551,7 +2554,7 @@ int main(int argc, char **argv)
             return 1;
         }
         if (!config_path) {
-            const char *exe_dir = SDL_GetBasePath();
+            const char *exe_dir = host_user_dir();
             snprintf(app_config, sizeof(app_config), "%sYsRecomp.ini", exe_dir ? exe_dir : "");
             config_path = app_config;
         }

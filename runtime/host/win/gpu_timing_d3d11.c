@@ -1,10 +1,9 @@
-/* GPU time of each image: see gpu_time.h. */
-#include "app/gpu_time.h"
+/* GPU time of each image: see host/host_gpu_timing.h. Windows host (compiled only on Windows). */
+#include "host/host_gpu_timing.h"
 
 #include <math.h>
 #include <stdio.h>
 
-#ifdef _WIN32
 #define COBJMACROS
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -162,26 +161,3 @@ void gpu_time_quit(void)
         ID3D11DeviceContext_Release(g_ctx);
     g_ctx = NULL;
 }
-#else
-int gpu_time_init(SDL_Renderer *r)
-{
-    (void)r;
-    return 0;
-}
-void gpu_time_mark(SDL_Renderer *r, int k)
-{
-    (void)r;
-    (void)k;
-}
-void gpu_time_presented(SDL_Renderer *r, uint64_t target_ns)
-{
-    (void)r;
-    (void)target_ns;
-}
-void gpu_time_report(void)
-{
-}
-void gpu_time_quit(void)
-{
-}
-#endif

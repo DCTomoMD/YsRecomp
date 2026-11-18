@@ -62,7 +62,7 @@ def main():
 
     # The session recorded with the menu replays the same
     state = re.search(r"Console state: (\w+)", r.stdout).group(1)
-    names = [f for f in os.listdir(rec) if f.endswith(".txt")]
+    names = [f for f in os.listdir(rec) if f.endswith(".txt") and not f.startswith(".")]  # no macOS ._* files
     session = os.path.join(rec, names[0])
     text = open(session, encoding="utf-8").read()
     if not re.search(r"^# menu \d+ [1-9]\d* \d+$", text, re.M):

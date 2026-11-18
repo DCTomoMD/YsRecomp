@@ -1,5 +1,7 @@
 #include "app/volume.h"
 
+#include <stddef.h>
+
 static int load_one(Config *cfg, const char *key, int *out)
 {
     *out = config_get_int(cfg, key, 100, 0, 100);

@@ -90,7 +90,7 @@
 | D3 | **.app ＋ `~/Library/Application Support`** | `host_paths` の macOS の既定値を `SDL_GetPrefPath` にする（M1 の段階 3 で関数を作り、M3 で macOS の既定値を入れる）。Windows は今と同じ |
 | D4 | **`-ffp-contract=off` を付ける**（互換性を重視） | 自前のコード（YsRecomp と PCERecomp のターゲット）に付ける。生成コードにも付ける。libm（`sin`、`cos`、`pow`。`psg.c:35, 315-316`、`adpcm.c:79-80`、`synth.c`）の結果は OS で最後の桁が違いうるので、完全一致は M3 で比べて確かめる |
 | D5 | **macOS でも Geargrafx と比べる試験を行う** | M3 で `reference/` と `gg_trace` を macOS でビルドする（GPL-3：参照専用で、配布物には入れない）。`GG_TRACE` の `.exe` の固定は M2 で直す |
-| D6 | **固定する** | URL を GitHub の自動生成 tar.gz から SDL の公式リリースのファイルに替え、`URL_HASH SHA256=` を付ける。ハッシュの値は M1 の作業の中で、ダウンロードの承認を得てから得る（公式が公開する値を使えるなら、それを使う） |
+| D6 | **固定する** | URL を GitHub の自動生成 tar.gz から SDL の公式リリースのファイルに替え、`URL_HASH SHA256=` を付ける。ハッシュの値は M1 の作業の中で、ダウンロードの承認を得てから得る（公式が公開する値を使えるなら、それを使う）。→ **M1 で実施**：公式の `SDL3-3.2.30.tar.gz` と、リリース API の sha256 で固定（`06_m1_host_skeleton.md` 2.2） |
 | D7 | **ツール側で正規化する**（必要な修正は行ってよい） | M2 で、ROM のパスの変数化と同時に `run_bios_check.py`、`check_all_sessions.py` を直す。セッションのファイルは書き換えない |
 | D8 | **共有の `.gitignore` に追加する** | `.gitignore` に `._*` と `.DS_Store` を追加した |
 | D9 | **Apple Silicon のみ**（Intel Mac は対象外）。最低の OS バージョンは使うライブラリで決める | arm64 だけでビルドする（universal にしない）。最低バージョンは M3 で SDL3 などの要件から決める |

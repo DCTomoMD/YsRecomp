@@ -22,8 +22,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.dirname(HERE))
 import pcerecomp_dir  # noqa: E402
+import build_paths  # noqa: E402
 GG = pcerecomp_dir.GG_TRACE
-OURS = os.path.join(ROOT, "build", "Release", "pce_trace.exe")
+OURS = build_paths.exe("pce_trace")
 sys.path.insert(0, HERE)
 sys.path.insert(0, pcerecomp_dir.TRACE_TOOLS)
 import gg_cache  # noqa: E402
@@ -83,7 +84,7 @@ def main():
     ap.add_argument("--frames", type=int)
     ap.add_argument("--work", default=os.path.join(ROOT, "build", "sessions"))
     ap.add_argument("--ours", default=OURS,
-                    help="our executable (default: pce_trace, interpreter only; e.g. build/Release/ys_trace.exe "
+                    help="our executable (default: pce_trace, interpreter only; e.g. build/Release/ys_trace "
                          "for the recompiled code)")
     ap.add_argument("--hle", action="store_true",
                     help="our side uses the BIOS routines rewritten in C (runtime/bios/hle.h)")

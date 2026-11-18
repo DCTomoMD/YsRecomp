@@ -29,20 +29,28 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
-YS_TRACE = os.path.join(ROOT, "build", "Release", "ys_trace.exe")
+sys.path.insert(0, os.path.dirname(HERE))
+import build_paths  # noqa: E402
+YS_TRACE = build_paths.exe("ys_trace")
 FOLDERS = (os.path.join(ROOT, "games", "ys", "sessions"), os.path.join(ROOT, "dist", "YsRecomp", "sessions"))
 WORK = os.path.join(ROOT, "build", "sessions")
 RECENT_S = 180
 
 
 def game_running():
-    """Is YsRecomp open (Windows: process list)?"""
+    """Is YsRecomp open (Windows: tasklist; elsewhere: pgrep)? When it cannot tell, says yes."""
+    name = build_paths.exe_name("YsRecomp")
     try:
-        out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq YsRecomp.exe", "/NH"], capture_output=True,
-                             text=True, timeout=10).stdout
+        if sys.platform == "win32":
+            out = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {name}", "/NH"], capture_output=True,
+                                 text=True, timeout=10).stdout
+            return name in out
+        r = subprocess.run(["pgrep", "-x", name], capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.SubprocessError):
         return True
-    return "YsRecomp.exe" in out
+    if r.returncode > 1:  # 0 = found, 1 = none, more = pgrep error
+        return True
+    return r.returncode == 0
 
 
 sys.path.insert(0, HERE)

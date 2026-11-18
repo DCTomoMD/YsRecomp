@@ -4,7 +4,7 @@ If the user's launcher images are in docs/ (outside Git), they go into YsRecomp/
 Nothing from the disc, the BIOS, the configuration or the saves goes into the package (YsRecomp.ini and saves/
 are created next to the .exe the first time the player runs it). Before building, checks that the .exe:
   - does not need the "Visual C++ Redistributable" (does not import VCRUNTIME140.dll or api-ms-win-crt-*);
-  - has the icon (runtime/app/ysrecomp.ico) embedded.
+  - has the icon (runtime/host/win/ysrecomp.ico) embedded.
 
 Usage: make_package.py YsRecomp.exe OUTPUT_FOLDER
 """
@@ -15,7 +15,7 @@ import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 README = os.path.join(ROOT, "package", "README.txt")
-ICON = os.path.join(ROOT, "runtime", "app", "ysrecomp.ico")
+ICON = os.path.join(ROOT, "runtime", "host", "win", "ysrecomp.ico")
 FILES = ("YsRecomp.exe", "README.txt")
 KEEP = ("YsRecomp.ini", "saves", "sessions", "menu_font.bin", "launcher_sfx.bin")
 GAME_DATA = ("menu_font.bin", "launcher_sfx.bin")

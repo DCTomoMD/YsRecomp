@@ -48,6 +48,8 @@ def files(root):
     res = set()
     for d, _, fs in os.walk(root):
         for f in fs:
+            if f.startswith("._") or f == ".DS_Store":  # macOS metadata, not source
+                continue
             res.add(os.path.relpath(os.path.join(d, f), root).replace("\\", "/"))
     return res
 

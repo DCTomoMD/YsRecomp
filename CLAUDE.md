@@ -124,7 +124,7 @@ natively on PC (Windows). The generated C mimics the CPU instruction by instruct
   `--bios "roms\[BIOS] TurboGrafx CD System Card (USA) (v2.0).pce"` (real BIOS; also for `pce_runtime`, `pce_trace`,
   `gg_trace`). `--gg-mix` = sound mixed as in Geargrafx. `--vrr` = V-Sync off (G-Sync/FreeSync). `--frame-timing` measures
   how long each frame stayed on screen (the user's monitor: 2560x1440, 180 Hz, locked at 120 Hz in Windows/driver, G-Sync;
-  the window reads the real Windows rate, `runtime/app/vblank.c`; pacing: single clock, `runtime/app/pacing.c`;
+  the window reads the real Windows rate, `runtime/host/win/display_timing_dwm.c`; pacing: single clock, `runtime/app/pacing.c`;
   `PCE_PACE_LOG=1`). `--screen-dump FROM COUNT FOLDER` saves what the window showed (BMP; with the options menu open,
   `m<frame>_<n>.bmp`); `--window-size W H` opens the window at that size. `--audio-wav FILE` records the sound sent to the
   device (not with `--turbo`, which is silent). `--audio-hiccup MS` stops the sound device MS ms every 5 s.
@@ -271,7 +271,15 @@ roms/ 直下に北米版の cue と bin 43 本、System Card (USA) v2.0 を上�
 - 試験の期待値（PASS_REGULAR_EXPRESSION、セッション、カバレッジ）は北米版専用。日本版には使えない。
 
 ### macOS
-- 現時点ではビルドできない。M2 / M3 の後に記入する。
+- ゲーム本体（生成 C、YsRecomp）は、まだビルドできない（M3）。M1 の時点で確認済みなのは、構成と
+  `pce_app`・`app_tests` のビルド、ROM 不要の quick 試験だけ（review_portability/06_m1_host_skeleton.md）。
+- 手順：`scripts/build.sh`（build.ps1 と同じ手順。`--test` / `--test-all` / `--test-hist` / `--verbose` /
+  `--target NAME`。`--package` は M3 まで使えない）。生成器は Ninja Multi-Config で、実行ファイルは Windows と同じ
+  `build/Release/` に出る（拡張子なし。ツールは `tools/build_paths.py` で名前を決める）。Python は `.venv/bin/python`。
+    scripts/build.sh --target pce_app --target app_tests
+    ctest --test-dir build -C Release -R '^(app_config|app_volume|host_layers)$'
+- OS の差は `cmake/platform_{windows,macos}.cmake` と `runtime/host/{win,null,common}` に置く。
+  層の規則は試験 `host_layers`（`tools/check_layers.py`、quick）が確かめる。
 
 ### 基準
 - 基準コミット：local_analysis/BASELINE_COMMIT.txt（7452c1b）

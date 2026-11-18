@@ -45,7 +45,7 @@ def main():
             print(f"FAILED ({crop}): the game or the menu script did not run to the end (code {r.returncode})")
             ok = False
             continue
-        names = sorted((n for n in os.listdir(out) if n.endswith(".bmp")), key=lambda n: (int(n[1:7]), int(n[8:-4])))
+        names = sorted((n for n in os.listdir(out) if n.endswith(".bmp") and not n.startswith(".")), key=lambda n: (int(n[1:7]), int(n[8:-4])))
         first = next((i for i, n in enumerate(names) if n[0] == "m"), None)
         if not first:
             print(f"FAILED ({crop}): no images of the menu or of the session before it: {names[:5]}")

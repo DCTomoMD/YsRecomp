@@ -44,7 +44,7 @@ RAM), not from recognizing the image. The emulated console never changes; everyt
 
 How the image reaches the screen: the game runs on one thread; each new frame is prepared on another (fixes, crop,
 fades, bars, equipment, smooth motion, `PrepSlot` in `runtime/main.c`); the window only uploads the textures and
-composes each image on the GPU (`gpu_draw.c`) at the moment it is shown (single clock, `pacing.c`/`vblank.c`), at any
+composes each image on the GPU (`gpu_draw.c`) at the moment it is shown (single clock, `pacing.c`/`host/win/display_timing_dwm.c`), at any
 refresh rate.
 
 **Still guessed** (survey of 2026-11-05; the 2nd list is done; the 3rd is in `ROADMAP.md`):
