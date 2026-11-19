@@ -65,7 +65,13 @@
   - 構成時に決まるので、ROM を後から置いたら構成し直す必要がある（`YsRecomp` のターゲットと同じ）。
 - macOS で確かめた [C]：`recomp_disc_ys` が `Skipped`、`equip_ice_preview.py` が終了コード 77、`host_layers`・`check_layers` は合格。ROM があるときのコマンドが変わっていないことは、A 案で確かめる [W]。
 
-### 4.3 2 回目に期待される結果 [W]
+### 4.3 2 回目（2026-11-19、run `44419593671`、head `542cf5a`）[C]
+
+- ジョブ `windows-x64` が緑（3 分 36 秒）。すべての手順が成功。
+- `ctest_report: OK`：head 32 件で 14 合格・17 skip（77）・1 失敗（`cpu_huc6280`、既知の失敗）。base は 31 件。
+  新しい失敗・消えた試験・合格から skip になった試験はない。下の期待どおり。
+
+期待していた結果（記録として残す）：
 
 - ジョブ `windows-x64` が緑。
 - head：14 合格、17 skip（77）、1 失敗（`cpu_huc6280`、known failure (both)）。`recomp_disc_ys` と `equip_ice_preview_ys` は base で fail、head で skip と表示される（不合格の理由にはならない）。
