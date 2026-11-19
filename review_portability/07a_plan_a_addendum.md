@@ -108,7 +108,7 @@ ctest --test-dir build -C Release -R "^(recomp_disc_ys|equip_ice_preview_ys)$" *
 | C3・C6 | 全試験 88 本、最後まで失敗は `cpu_huc6280` のみ | 89 本、最後まで失敗は `cpu_huc6280` のみ。名前の差は `host_layers` だけ（`Compare-Object`） | 合格 |
 | skip | `trace_ys_boot`、`trace_ys_run`、`session_ys_boot`、`session_ys_game`、`session_ys_save`、`perf_ys`、`cd_image` | 同じ 7 本 | 合格 |
 | C4・C7 | パッケージ試験 2 本合格、zip 28,519 KB | 2 本合格、zip 28,520 KB | 合格 |
-| C8 | アイコン：未報告 | after のアイコンは見た | **見比べが未報告** |
+| C8 | `C:\work\icon_before\YsRecomp.exe`（退避した before の `.exe`） | `dist\YsRecomp\YsRecomp.exe`（`-Package` で作り直した after） | 合格（2 つを並べて同じ絵。CI の `check_rc --compare` でもリソースが同じ） |
 | C9 | GPU（D3D11）平均 3.05 ms、`host:` の行なし | 平均 2.98 ms、`host:` の行なし | 合格 |
 | C10 | — | SDL3 の SHA-256 `4C3B0933…2E3D` 一致、`check_all_sessions.py --help` が使い方を表示 | 合格 |
 | C11 | `recomp_disc_ys`、`equip_ice_preview_ys` 合格 | 両方合格（ROM ありで元の試験として動く） | 合格 |

@@ -88,7 +88,7 @@ build.ps1 と同じ手順（構成がなければ構成 → Release のビルド
 
 | ID | 内容 | 段階 |
 |---|---|---|
-| M1-1 | Windows で、M1 の前後で動作が同じこと（5 章）。**2026-11-20、Windows 11 x64 の実機で確認済み**（C1〜C7・C9〜C11 合格。C8 のアイコンは M1 の前の絵との見比べが未報告）。結果：`07a_plan_a_addendum.md` の 3 章 | 実機（済）／C8 のみ残り |
+| M1-1 | Windows で、M1 の前後で動作が同じこと（5 章）。**2026-11-20、Windows 11 x64 の実機で確認済み**（C1〜C11 すべて合格）。結果：`07a_plan_a_addendum.md` の 3 章 | 実機（済） |
 | M1-6 | `recomp_lockstep_ys` が全試験（`-j 2`）で 1 回目に失敗し 2 回目に合格することがある。照合は `LOCKSTEP OK` で、終了コードが 0 でない。M1 の前（`06b62c6`）でも起き、単独では 25 回すべて合格（M1 が原因ではない） | 原因調査は未定（07a の 3.3） |
 | M1-2 | `host_paths` の macOS の方針（`SDL_GetPrefPath`、`<org>` の値 = H2） | M3 |
 | M1-3 | macOS の host 実装（CAMetalDisplayLink、QoS）は null のまま | M3 以降（任意） |
