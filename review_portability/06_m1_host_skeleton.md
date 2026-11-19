@@ -88,7 +88,8 @@ build.ps1 と同じ手順（構成がなければ構成 → Release のビルド
 
 | ID | 内容 | 段階 |
 |---|---|---|
-| M1-1 | Windows で、M1 の前後で動作が同じこと（5 章） | Windows VM（M2 の前） |
+| M1-1 | Windows で、M1 の前後で動作が同じこと（5 章）。**2026-11-20、Windows 11 x64 の実機で確認済み**（C1〜C7・C9〜C11 合格。C8 のアイコンは M1 の前の絵との見比べが未報告）。結果：`07a_plan_a_addendum.md` の 3 章 | 実機（済）／C8 のみ残り |
+| M1-6 | `recomp_lockstep_ys` が全試験（`-j 2`）で 1 回目に失敗し 2 回目に合格することがある。照合は `LOCKSTEP OK` で、終了コードが 0 でない。M1 の前（`06b62c6`）でも起き、単独では 25 回すべて合格（M1 が原因ではない） | 原因調査は未定（07a の 3.3） |
 | M1-2 | `host_paths` の macOS の方針（`SDL_GetPrefPath`、`<org>` の値 = H2） | M3 |
 | M1-3 | macOS の host 実装（CAMetalDisplayLink、QoS）は null のまま | M3 以降（任意） |
 | M1-4 | macOS のパッケージ（`.app`、`Info.plist.in`、`.icns`）、生成 C の警告フラグ | M3 |
@@ -96,7 +97,7 @@ build.ps1 と同じ手順（構成がなければ構成 → Release のビルド
 
 ## 5. Windows VM での確認手順
 
-- VM の作り方（Windows 11 ARM 版、画面イメージ付き）、M1 の前（`06b62c6`）との比べ方、チェックポイント C1〜C10、この確認に戻るときのプロンプト：`07_plan_a_windows_arm_vm.pdf`（A 案）。
+- VM の作り方（Windows 11 ARM 版、画面イメージ付き）、M1 の前（`06b62c6`）との比べ方、チェックポイント C1〜C10、この確認に戻るときのプロンプト：`07_plan_a_windows_arm_vm.pdf`（A 案）。B 案を取り込んだ後の差し替え（フォークからの clone、確かめる対象 `e9c4f6e`、SDL3 のハッシュの探し方、C11、新しいプロンプト）：`07a_plan_a_addendum.md`。
 - VM の用意ができるまでは、GitHub Actions の Windows で ROM 不要の範囲を確かめる（B 案、ブランチ `ci/windows-github-actions`、`08_plan_b_github_actions.md`）。
 
 前提：これまでと同じ（VS 2022 Build Tools、Python 3.14、`roms/` 直下に上流の固定名の北米版 cue・bin と System Card 2.0）。SDL3 の URL が変わったので、**`build\` を消してから**行う（FetchContent が新しい URL から取り直す。生成 C は `games\ys\generated\` にあり、`disc.toml` と生成器が変わっていないので作り直されない見込み [A]）。
