@@ -106,6 +106,8 @@ runtime の C は変えていないので、C8（アイコン）と C9（GPU）�
 
 ```powershell
 cd C:\work\YsRecomp
+# ctest and cmake are not in PATH (build.ps1 calls them by full path): add the Build Tools' CMake for this window
+$env:Path = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;" + $env:Path
 git fetch; git checkout 18e1eaf; git submodule update
 Remove-Item -Recurse -Force build
 .\build.ps1
@@ -122,6 +124,7 @@ python tools\trace\run_bios_check.py games\ys\sessions\session_20261017_161116.t
 ### 6.2 after（`4d575ff`）
 
 ```powershell
+# (in a new window, the $env:Path line of 6.1 again first)
 git checkout feature/japanese-disc-support; git pull
 git submodule sync; git submodule update
 git log --oneline -3                                   # -> 4d575ff を含む（先頭は文書だけのコミット）
