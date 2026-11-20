@@ -153,8 +153,36 @@ M3 の後に残るもの：
 R25（改行）：
 - macOS の生成 C は LF [C]。
 - 25 本の中身の SHA-256（ファイル名順に、`名前 + NUL + 中身`。CRLF を LF にそろえて計算）の先頭 16 桁は `9f8978190fba1dde`。
-- Windows でも同じ計算をして一致すれば、生成器は OS によらず同じ C を出している [U → Windows で確認]。
+- Windows でも同じ計算をして一致すれば、生成器は OS によらず同じ C を出している。**Windows でも `9f8978190fba1dde`**
+  （09 の 7 章の W10）[C]。R25 は閉じる。
 
 ```powershell
 python -c "import hashlib,glob,os;h=hashlib.sha256();[h.update(os.path.basename(f).encode()+b'\0'+open(f,'rb').read().replace(b'\r\n',b'\n')) for f in sorted(glob.glob('games/ys/generated/c/*.c'))];print(h.hexdigest()[:16])"
 ```
+
+## 9. M3-2 の結果（2026-11-21、macOS arm64、Apple clang 21.0.0）
+
+- 前提：M2 の Windows での確認は完了（09 の 7 章、W1〜W10 合格）。コードと CMake は変えていない（M3-2 は確かめるだけ）。
+
+| 実行したこと | 結果 |
+|---|---|
+| `scripts/build.sh --target ys_trace` | 成功（2 分 01 秒。`ys_recomp` は M3-1 のものを使用）。`ys_trace` は `Mach-O 64-bit executable arm64` [C] |
+| ビルドの警告 | 2 件：① `pce_trace.c:456` の `-Wformat`（既知、PCERecomp。3 章）、② リンカーの `ignoring duplicate libraries: 'pcerecomp/Release/libpce_core.a'`（新しく見つかった。同じライブラリがリンクの行に 2 回並ぶことへの Apple の `ld` の注意で、結果には影響しない [A]）。どちらも E1 の対象。直し方は M3-3 で `YsRecomp` のリンクと一緒に提案する |
+| `ctest -N` | 99 本（E2 と同じ数）[C] |
+| `ys_trace` を直接使う試験 44 本のうち、`ys_trace` だけで動く 42 本（`-j 4`） | **42 本すべて合格、skip 0**（6 分 44 秒）[C] |
+
+- 合格した 42 本：
+  - ロックステップ：`recomp_lockstep_ys`、`recomp_lockstep_ys_nobios`（生成 C ＝ インタープリタ。1 回目で合格）。
+  - 期待値が固定の試験（Windows と同じ期待値のまま）：`layout_switches_ys`、`hud_save_ys`、`hud_save_ys2`、`battle_ys2`、
+    `scroll_ys`、`scroll_back_ys`、`actors_ys`、`actors_ys1`、`equipment_ys`、`masks_*`、`zoom_*`、`crop_flash_ys`、
+    `cd_pop_ys`、`motion_*`（10 本）、`gpu_*`（3 本）、`equip_*`（9 本）ほか。
+- 残した 2 本：`dialog_ys`（`YsRecomp` も使う。M3-3）、`perf_ys`（`run_perf_check.py`。Windows でも skip。M3-7 で
+  `reference/` を入れてから）。
+- **R06（浮動小数点）**：期待値が固定の試験（滑らかな動き、フェード、GPU の組み立てを CPU で真似るもの、装備）が macOS でも
+  同じ値で合格した。`-ffp-contract=off` で、試験が見る範囲では Windows と同じ結果になっている [C]。`YsRecomp` の画面（Metal）と
+  history の 10 本は、M3-3・M3-8 で確かめる（R06 は M3-8 で閉じる）。
+- `--gpu` の試験（`gpu_window_ys`、`gpu_roof_ys`、`gpu_behind_roof_ys`、`motion_cave_fast_ys`、`motion_edge_ys`、
+  `masks_mine_ys`、`equip_ys1`、`equip_ys2`）：`ys_trace` は隠したウィンドウ（`SDL_WINDOW_HIDDEN`）に SDL の renderer を作り
+  （`ys_trace_ext.c:1546`）、`runtime/app/gpu_draw.c` で GPU に組み立てさせた画像を、CPU の `motion_render` の画像と点ごとに
+  比べる [C]。これが macOS で合格したので、隠したウィンドウでも GPU で描けて、CPU と同じ画像になる [C]。どの renderer
+  （macOS の既定は Metal）が選ばれたかは表示されない [A]。R20 は `ys_trace` の範囲では問題なし。`YsRecomp` の窓（R14・R20）は M3-3 で確かめる。
