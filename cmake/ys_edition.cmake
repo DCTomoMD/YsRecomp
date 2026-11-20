@@ -204,6 +204,11 @@ function(ys_edition)
         target_compile_definitions(YsRecomp PRIVATE "PCE_DOCS_DIR=\"${CMAKE_SOURCE_DIR}/docs\"")
         target_link_libraries(YsRecomp PRIVATE ys_recomp pce_app pce_input equip_frames trace_profiler SDL3::SDL3-static)
 
+        # The folder of the ys_trace images below. ys_trace does not create it, and a picture it cannot write makes it
+        # exit with 1 without a message (after "LOCKSTEP OK"): in a new build the first of these tests failed until a
+        # Python test had created the folder (M1-6)
+        file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/recomp_ys")
+
         # Lockstep (recompiled vs interpreter, compared on every instruction and every frame: CPU, RAM, VRAM,
         # sprites, VDC, palette, image, sound, CD RAM, save and ADPCM RAM) in the session up to the harbor. Together with
         # session_ys_game (interpreter = Geargrafx), proves that the recompiled code is also equal to Geargrafx.

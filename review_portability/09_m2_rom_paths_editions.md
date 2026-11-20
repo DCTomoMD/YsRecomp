@@ -85,7 +85,7 @@
 |---|---|---|
 | M2-1 | Windows で M2 の前後の動作が同じこと（6 章） | 実機（確認待ち） |
 | M2-2 | `build.ps1 -Edition` の動作（pwsh がないため macOS では未確認） | 実機（6 章の W6） |
-| M1-6 | `recomp_lockstep_ys` の 1 回目の失敗（M1 の前から）。M2 では原因を調べていない | 未定 |
+| M1-6 | `recomp_lockstep_ys` の 1 回目の失敗（M1 の前から）。**M2 の後で原因を特定**：書き出し先の `build/recomp_ys/` を作るものが CMake にも `ys_trace` にもなく、`ys_trace` は画像を書けないと何も言わずに終了コード 1 になる（`LOCKSTEP OK` の後、`dump_frame` の `save_ppm`）。新しいビルドでは、このフォルダに書く最初の試験がこれで、フォルダは後で Python の試験（`dialog_ys` の `os.makedirs`）が作る。2 回目と単独の実行ではフォルダがあるので合格する。macOS では `pce_trace`（同じ `dump_frame`）で、フォルダがないと `rc=1`、あると `rc=0` を確かめた [C]。終了コードで判定する試験は同じフォルダにほかに 22 本あるが、どれも後で動くので当たらなかったと見ている [A]。直し：`cmake/ys_edition.cmake` で構成のときに `file(MAKE_DIRECTORY …/recomp_ys)`（試験の定義は変わらない）。`ys_trace` は macOS ではまだ作れない（M3）ので、Windows の新しいビルドの全試験で 1 回目から合格することの確認が残る。画像を書けないときに知らせるのは PCERecomp の変更になるので、していない | 直した（Windows で確認待ち） |
 | M2-3 | 日本版の変数（`YS_JP_CUE`・`YS_JP_BIOS`）、試験名・ターゲット名の引数化、`profile`・`EQUIP` の引数、`.rc`・パッケージの版ごとの名前 | Phase 3B |
 | M2-4 | `equip_preview.py`・`equip_ice_preview.py`・`run_app_start_test.py`・`run_launcher_test.py`・`run_package_test.py`・`make_icon.py` の版の引数（CMake から明示の引数で呼ばれるので M2 では不要） | Phase 3B |
 | M2-6 | `run_bios_check.py` をセッションの指定なしで動かすと、BIOS なしで記録したセッション（`# bios: -`、32 本）に当たったところで「missing ... -: test skipped」（77）で止まる。M2 の前からの動作（before と after で同じ）。**M2 の後で解決**：BIOS なしのセッションは比べる相手（本物の BIOS での実行）がないので飛ばし、その本数を表示する。BIOS ありのセッションが 1 本も残らないときは 77（何も比べずに合格にはしない）。macOS では指定なし・`--frames 600` で BIOS ありの 8 本を比べて `RESULT: all equal`（終了コード 0）、BIOS なしだけを指定すると 77、`bios_c_ys` は合格。フレームの制限なしの全セッションは時間がかかるので未実行 | 解決（M2 の後） |
@@ -147,7 +147,10 @@ python tools\trace\run_bios_check.py --edition jp *>> after_tools.txt
 | W6 | `-Edition jp` | `Edition 'jp' is not available yet (Phase 3B)` で止まる |
 | W7 | ツール | `before_bios.txt` と `after_bios.txt` の表と `RESULT` 行が同じ（macOS では `cd_read $E009 7 7 0 0`、`RESULT: all equal in every session`）。`check_all_sessions.py --help` に `--edition`・`--cue`・`--bios` がある。`run_bios_check.py --edition jp` は `not available yet` |
 
-- `recomp_lockstep_ys` が 1 回目に失敗し 2 回目に合格するのは M1-6（M2 の前から）。判定には使わない。
+- `recomp_lockstep_ys` が 1 回目に失敗し 2 回目に合格するのは M1-6（M2 の前から）。before では判定に使わない。after
+  （M1-6 の直しを含むコミット）では新しいビルドの全試験で 1 回目から合格するはずなので、`after_testall.txt` に
+  `recomp_lockstep_ys` の失敗の行がないことも確かめる（`Remove-Item -Recurse -Force build` の後なので新しいビルド）。
+  `Select-String "recomp_lockstep_ys" after_testall.txt` で、`Passed` の行が 1 つだけなら 1 回目で合格。
 - 結果のまとめ：
 
 ```powershell
