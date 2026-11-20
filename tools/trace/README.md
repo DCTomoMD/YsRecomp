@@ -38,7 +38,8 @@ the chip sound played in the menu goes to the console) and `# dialog F 0|1` (ins
 
 ## BIOS routines in C
 - `python tools\trace\run_bios_check.py [sessions] [--routines E009,E012|all]` (test `bios_c_ys`): runs PCERecomp's
-  `bios_check.exe` on the Ys sessions.
+  `bios_check.exe` on the Ys sessions. Sessions recorded without the BIOS (`# bios: -`) are left out; when none is
+  left, the result is 77 (skipped).
 - Test `hle_timing_ys` (PCERecomp's `run_hle_timing_test.py`): the session `session_20261020_221359` (recorded with the
   BIOS), replayed with `--hle`, has the image equal to the real BIOS one in every frame from 1 to 11195, except 2881-4248
   (see the ROADMAP).

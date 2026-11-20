@@ -88,7 +88,7 @@
 | M1-6 | `recomp_lockstep_ys` の 1 回目の失敗（M1 の前から）。M2 では原因を調べていない | 未定 |
 | M2-3 | 日本版の変数（`YS_JP_CUE`・`YS_JP_BIOS`）、試験名・ターゲット名の引数化、`profile`・`EQUIP` の引数、`.rc`・パッケージの版ごとの名前 | Phase 3B |
 | M2-4 | `equip_preview.py`・`equip_ice_preview.py`・`run_app_start_test.py`・`run_launcher_test.py`・`run_package_test.py`・`make_icon.py` の版の引数（CMake から明示の引数で呼ばれるので M2 では不要） | Phase 3B |
-| M2-6 | `run_bios_check.py` をセッションの指定なしで動かすと、BIOS なしで記録したセッション（`# bios: -`、32 本）に当たったところで「missing ... -: test skipped」（77）で止まる。M2 の前からの動作（before と after で同じ）。BIOS なしのセッションを飛ばすようにするかは別に決める | 未定（ユーザー判断） |
+| M2-6 | `run_bios_check.py` をセッションの指定なしで動かすと、BIOS なしで記録したセッション（`# bios: -`、32 本）に当たったところで「missing ... -: test skipped」（77）で止まる。M2 の前からの動作（before と after で同じ）。**M2 の後で解決**：BIOS なしのセッションは比べる相手（本物の BIOS での実行）がないので飛ばし、その本数を表示する。BIOS ありのセッションが 1 本も残らないときは 77（何も比べずに合格にはしない）。macOS では指定なし・`--frames 600` で BIOS ありの 8 本を比べて `RESULT: all equal`（終了コード 0）、BIOS なしだけを指定すると 77、`bios_c_ys` は合格。フレームの制限なしの全セッションは時間がかかるので未実行 | 解決（M2 の後） |
 | M2-5 | `equip_ice_preview.py` / `equip_preview.py` の skip の文（`no disc or BIOS in roms\`）は古い言い方のまま（542cf5a の文は CMake 側だけ直した） | 3B でまとめて |
 
 ## 6. Windows の実機での確認手順

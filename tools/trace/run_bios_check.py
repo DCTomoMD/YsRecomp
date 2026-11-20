@@ -8,7 +8,9 @@ Usage: python tools/trace/run_bios_check.py [sessions ...] [--routines E009,E012
                                             [--cue <disc>] [--bios <system card>]
        (no sessions: all of the edition's sessions, games/ys/sessions/ for usa; game, BIOS and save come from each
        one's header, resolved on this machine by tools/editions.py; --cue/--bios replace the header's)
-Exit: 0 = all equal, 1 = some difference, 2 = usage error, 77 = disc or BIOS missing (skipped).
+       Sessions recorded without the BIOS (`# bios: -`) are left out: there is no real BIOS run to compare with.
+Exit: 0 = all equal, 1 = some difference, 2 = usage error, 77 = disc or BIOS missing, or no session recorded with
+      the BIOS (skipped).
 """
 import argparse
 import glob
@@ -61,6 +63,7 @@ def main():
         return 2
 
     procs = []
+    without_bios = []
     for s in sessions:
         info = read_header(s)
         game, bios = info.get("game"), info.get("bios")
@@ -71,6 +74,11 @@ def main():
             print(f"{s}: header without 'game', 'bios' or 'frames'")
             return 2
         editions.session_edition(info, ed.id)
+        if bios == "-":
+            # Recorded with the C routines (no real BIOS): its input does not replay the same game with the real
+            # BIOS, so there is nothing to compare against
+            without_bios.append(s)
+            continue
         game, bios = editions.header_path(game, ed, a.cue), editions.header_path(bios, ed, a.bios)
         if not os.path.exists(game) or not os.path.exists(bios):
             print(f"missing {game} or {bios}: test skipped")
@@ -81,6 +89,11 @@ def main():
         cmd += ["--bios", bios, game, str(frames)]
         procs.append((s, subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                           text=True, encoding="utf-8", errors="replace")))
+    if without_bios:
+        print(f"{len(without_bios)} session(s) recorded without the BIOS (# bios: -) left out")
+    if not procs:
+        print("no session recorded with the BIOS: nothing to check, test skipped")
+        return 77
     print(f"Checking {len(procs)} session(s) ...", flush=True)
 
     totals = {}
