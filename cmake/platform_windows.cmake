@@ -19,8 +19,11 @@ endif()
 set(PLATFORM_HOST_SOURCES
     runtime/host/win/display_timing_dwm.c
     runtime/host/win/process_win.c
-    runtime/host/win/gpu_timing_d3d11.c)
+    runtime/host/win/gpu_timing_d3d11.c
+    runtime/host/win/paths_win.c)
 set(PLATFORM_HOST_LIBRARIES dwmapi)
+# Where the user's data goes (test host_paths): next to the executable
+set(PLATFORM_USER_DIR exe)
 
 # Generated C (~40 MB in 24 parts)
 function(platform_generated_code target)

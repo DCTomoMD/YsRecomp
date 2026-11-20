@@ -145,6 +145,9 @@ set_tests_properties(app_disc_id PROPERTIES SKIP_RETURN_CODE 77)
 # CD music with the options menu open (console paused) and then resuming where it stopped.
 add_test(NAME app_cd_menu_music COMMAND app_tests cdmenu "${YS_USA_CUE}")
 set_tests_properties(app_cd_menu_music PROPERTIES SKIP_RETURN_CODE 77)
+# Where the program reads its resources and writes the user's data (host layer; the OS policy comes from
+# cmake/platform_*.cmake: next to the executable on Windows, Application Support on macOS).
+add_test(NAME host_paths COMMAND app_tests paths ${PLATFORM_USER_DIR})
 
 
 find_program(PYTHON_EXE NAMES python python3)
@@ -180,7 +183,7 @@ ys_edition(ID usa CUE "${YS_USA_CUE}" BIOS "${YS_USA_BIOS}" GAME_DIR "${CMAKE_SO
 # touch the console or the recompiler. Tests of the same session run together in a single run.
 set(TESTS_QUICK app_config app_volume app_menu app_video app_image app_crop
     app_redraw app_fade app_input app_disc_id app_cd_menu_music app_start_ys nobios_ys app_launcher equip_c_ys
-    app_mark_ys host_layers)
+    app_mark_ys host_layers host_paths)
 set(TESTS_CONSOLE trace_ys_boot trace_ys_run session_ys_boot session_ys_game session_ys_save fade_ys
     coverage_ys bios_c_ys hle_timing_ys nobios_cabin_ys equip_preview_ys equip_ice_preview_ys game_windows_ys windows_ys1 windows_crop_ys
     panel_ys)

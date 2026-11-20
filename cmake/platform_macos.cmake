@@ -14,12 +14,16 @@ add_compile_options(-ffp-contract=off)
 # it links it once either way, so the warning says nothing about the result (M3-3)
 add_link_options(-Wl,-no_warn_duplicate_libraries)
 
-# Host layer (runtime/host): no macOS implementation yet (null: no refresh time, no GPU time, no priority change)
+# Host layer (runtime/host): the user-data folder (mac/); the rest has no macOS implementation yet
+# (null: no refresh time, no GPU time, no priority change)
 set(PLATFORM_HOST_SOURCES
     runtime/host/null/display_timing_null.c
     runtime/host/null/process_null.c
-    runtime/host/null/gpu_timing_null.c)
+    runtime/host/null/gpu_timing_null.c
+    runtime/host/mac/paths_mac.c)
 set(PLATFORM_HOST_LIBRARIES)
+# Where the user's data goes (test host_paths): ~/Library/Application Support/<app id>/ (decision D3)
+set(PLATFORM_USER_DIR pref)
 
 # Generated C: at most 4 files compiled at the same time (M3-1: the largest part takes ~2.6 GB and ~2 min with
 # Apple Clang -O3; 4 at a time fits in 24 GB with room for the rest of the build). No warning flags: none came out.

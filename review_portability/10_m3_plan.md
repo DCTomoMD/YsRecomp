@@ -281,3 +281,61 @@ Select-String -Path before_m33_*.txt, after_m33_*.txt -Pattern "tests passed|\*\
 | X1 | `after_m33_build.txt` に新しい警告がない（`menu.c` の `switch` を MSVC でもコンパイル） |
 | X2 | 全試験：before・after とも 89 本、最後まで失敗は `cpu_huc6280` だけ、skip は同じ 7 本 |
 | X3 | `app_menu_intro_ys` が合格し、`lit pixels` の行が出る。`app_menu_image_ys` が合格（`newer frame` の行の数は前と同じでなくてよい） |
+
+## 11. M3-4 の結果（2026-11-21、macOS arm64）
+
+### 11.1 直したこと
+
+| ファイル | 変更 |
+|---|---|
+| `runtime/host/host_paths_os.h`（新規） | host の中だけで使う宣言 `host_paths_os_user_dir(base, app_id)`：書き込み先を OS が決める |
+| `runtime/host/win/paths_win.c`（新規） | 実行ファイルのフォルダを返す（**今と同じ**。`app_id` は使わない） |
+| `runtime/host/mac/paths_mac.c`（新規） | `SDL_GetPrefPath("", app_id)`：`~/Library/Application Support/<app_id>/`（D3、Q3：組織名は空）。`app_id` がないときや作れないときは実行ファイルのフォルダ（ログに残す） |
+| `runtime/host/common/host_paths_sdl.c` | 資源は今と同じ `SDL_GetBasePath()`。書き込み先は `host_paths_os_user_dir` で、**最初に `host_user_dir()` を呼んだときに**決める（macOS では SDL がそのときフォルダを作るので、ディスクを引数で渡す起動や `--config` の試験では、ユーザーのフォルダに何も作らない） |
+| `cmake/platform_windows.cmake`・`platform_macos.cmake` | それぞれの `paths_*.c` を `PLATFORM_HOST_SOURCES` に足した。試験の期待を `PLATFORM_USER_DIR`（`exe` / `pref`）で渡す |
+| `CMakeLists.txt` | 新しい試験 `host_paths`（`app_tests paths ${PLATFORM_USER_DIR}`、ROM 不要）を quick に足した。**試験は 99 本 → 100 本** |
+| `tests/app/app_tests.c` | `test_paths`：資源が実行ファイルのフォルダであること。書き込み先が、`exe` では実行ファイルのフォルダ、`pref` では `$HOME/Library/Application Support/YsRecompHostPathsTest/`（実装とは別に組み立てた期待値）であること。`pref` では、そこに書いて読み戻し、書いたファイルとフォルダを消す |
+| `runtime/main.c`（H3、Q4） | `window_fullscreen_followed()`：窓が `screen_apply` を通らずに全画面に入った・出たとき（`SDL_EVENT_WINDOW_ENTER/LEAVE_FULLSCREEN`）、設定 `fullscreen` を窓に合わせ、オプションメニューの表示と ini をそろえる（Alt+Enter と同じ保存）。ランチャーとゲームの 2 つの事件のループに入れた |
+
+- **H3 の調べ（[C]、SDL 3.2.30 のソース）**：
+  - SDL は macOS の「Window」メニューに `Toggle Full Screen`（Cmd+Ctrl+F）を作り（`SDL_cocoaevents.m:504`）、緑のボタンと同じ macOS 標準の全画面に切り替える。窓が `SDL_WINDOW_RESIZABLE`（`main.c` の窓はこれ）なら使える。
+  - キーの事件は、メニューより先にゲームにも渡る（`Cocoa_DispatchEvent` の後に `[super sendEvent:]`）。そのため、ゲームで Cmd+Ctrl+F を処理すると 2 回切り替わる。**キーの処理は足さず、設定を窓に合わせる形にした**（2026-11-21、ユーザーの選択）。Alt+Enter はそのまま。
+  - Windows では、この事件は `WIN_SetWindowFullscreen` の中（`SDL_windowswindow.c:1292`）と `SDL_UpdateFullscreenMode` の確定の時だけ送られる。最小化（別の窓への切り替え）は確定しないので送られない。つまり Windows では、ゲーム自身の `screen_apply` の結果としてしか届かず、そのときは値が同じなので何もしない（**Windows の動作は変わらない**、ソースの読みで [C]、実機は 11.4 の Y3）。
+
+### 11.2 macOS で確かめたこと
+
+| 実行したこと | 結果 |
+|---|---|
+| `scripts/build.sh`（全ターゲット） | 成功、警告 0 [C] |
+| `host_paths`、`host_layers` | 合格。`paths: user data /Users/<user>/Library/Application Support/YsRecompHostPathsTest/`。試験の後、そのフォルダは残っていない [C]。`host_layers`（`check_layers.py`）は新しい `host/mac/` と `host/win/` のファイルも見て合格 [C] |
+| ディスクを引数で渡す起動（`--config` あり） | `~/Library/Application Support/YsRecomp` は作られない [C] |
+| プレイヤーの起動（引数なし、`~/Library/Application Support/YsRecomp/YsRecomp.ini` に `game_folder` を置いて、`--turbo --frames 120`） | セーブが `~/Library/Application Support/YsRecomp/saves/Ys Book I & II (USA).brm` に書かれた。実行ファイルの隣（`build/Release/`）には ini も `saves/` も書かれない [C]。確かめた後、このフォルダは消した |
+| history 以外の全試験（`-j 4`、H3 の前） | 90 本のうち 81 本合格、skip 7 本（Windows と同じ 7 本、`reference/` がない）、失敗 2 本：`cpu_huc6280`（R21、M3-7）、`app_package_ys`（`ERROR: the .exe does not have the icon embedded`：Windows のパッケージ作りのまま、M3-6）（18 分 13 秒）[C] |
+| H3 の後の quick（22 本） | 21 本合格、失敗は `cpu_huc6280` だけ [C] |
+| H3 の後の `YsRecomp` の試験 18 本（`-j 4`） | **18 本すべて合格**、skip 0（12 分 52 秒）。試験の後も `~/Library/Application Support/YsRecomp` は作られていない [C] |
+
+- **macOS で確かめていないもの**：Cmd+Ctrl+F と緑のボタンで、設定（オプションメニューの表示と ini）が追従すること。隠した窓の試験では全画面にしない（`hidden_window()`）ので、見える窓で手で確かめる必要がある。M3-5 の `.app` の確認（ユーザー）で一緒に行う。
+
+### 11.3 リスクの状態
+
+| ID | 結果 |
+|---|---|
+| R05（書き込み先） | macOS は Application Support、Windows は今と同じ [C]（Windows は 11.4 で確認） |
+| M1-2（`host_paths` の方針） | 解決（macOS 側）。`.app` の資源の場所（`Contents/Resources`）は M3-5 |
+| H2（組織名） | 空文字（Q3）で実装した |
+| H3（全画面のショートカット） | 上の 11.1。手での確認は M3-5 |
+
+### 11.4 Windows で確かめること（10.6 の M3-3 の確認と一緒に行う）
+
+before は `4a92ba8`（M3-2）、after は M3-4 のコミット。10.6 の手順の after を M3-4 のコミットにして実行し、次も行う。
+
+```powershell
+ctest --test-dir build -C Release -R "^host_paths$" -V *> after_m34_paths.txt
+Select-String -Path after_m34_paths.txt -Pattern "paths:|all good|FAILED"
+```
+
+| ID | 確かめること |
+|---|---|
+| Y1 | `host_paths` が合格し、`paths: user data` が実行ファイルのフォルダ（`...\build\Release\`）。試験の数は after で 100 本（`Compare-Object` の差は `host_paths` の 1 本だけ） |
+| Y2 | `-Package` の後、`dist\YsRecomp\YsRecomp.exe` を引数なしで起動すると、ini と `saves\` が今までどおり `dist\YsRecomp\` に書かれる |
+| Y3 | Alt+Enter で全画面と窓を行き来でき、オプションメニューの表示と ini の `fullscreen` が合う（M3-4 の前と同じ） |

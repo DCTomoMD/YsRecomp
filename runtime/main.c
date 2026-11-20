@@ -1249,6 +1249,23 @@ static void screen_apply(Screen *s, int resize)
     screen_update_pacing(s, 0.0);
 }
 
+/* The window entered or left fullscreen by itself, not through screen_apply: on macOS, the system's own toggle
+ * (Cmd+Ctrl+F in the Window menu that SDL adds, or the green button). The setting follows the window, so the menu shows it
+ * and the .ini keeps it. After screen_apply the event only confirms the setting: nothing changes. 1 = the setting changed
+ * (the caller updates the menu and saves). */
+static int window_fullscreen_followed(Screen *s, int fullscreen)
+{
+    if (hidden_window() || !s->video.fullscreen == !fullscreen)
+        return 0;
+    s->video.fullscreen = fullscreen;
+    if (fullscreen)
+        SDL_HideCursor();
+    else
+        SDL_ShowCursor();
+    printf("%s by the window itself: setting followed.\n", fullscreen ? "Fullscreen" : "Windowed");
+    return 1;
+}
+
 /* Draws the texture's w x h image (sub times larger: smooth motion) with the image options
  * (app/present.h), with black borders. */
 /* --screen-dump FROM COUNT FOLDER: saves each image shown in the window (BMP) while the game frame is between
@@ -2086,6 +2103,11 @@ static int run_launcher(SDL_AudioStream *audio, LauncherOptions *o, const char *
                     if (o->config_path && !menu->open)
                         app_save_settings(o->config_path, o->vol, *o->skip_intro, *o->pause_bg, &input_map, &s->video);
                 }
+            } else if ((ev.type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN || ev.type == SDL_EVENT_WINDOW_LEAVE_FULLSCREEN) &&
+                       window_fullscreen_followed(s, ev.type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN)) {
+                menu->video.fullscreen = menu->pending.fullscreen = s->video.fullscreen;
+                if (o->config_path && !menu->open)
+                    app_save_settings(o->config_path, o->vol, *o->skip_intro, *o->pause_bg, &input_map, &s->video);
             } else if (input_pads_event(&pads, &ev))
                 ;
             else if (ev.type == SDL_EVENT_KEY_DOWN) {
@@ -2935,7 +2957,7 @@ int main(int argc, char **argv)
     }
     while (running) {
         SDL_Event ev;
-        int screen_changed = 0, fullscreen_toggled = 0;
+        int screen_changed = 0, fullscreen_toggled = 0, fullscreen_followed = 0;
 #ifdef PCE_APP_YS
         int menu_result = 0, menu_opening = 0, focus = 0; /* focus: -1 = the window lost focus, 1 = regained it */
 #endif
@@ -2987,6 +3009,10 @@ int main(int argc, char **argv)
                      (ev.key.mod & SDL_KMOD_ALT)) {
                 if (!ev.key.repeat)
                     fullscreen_toggled = 1; /* Alt+Enter: fullscreen <-> window */
+            } else if ((ev.type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN || ev.type == SDL_EVENT_WINDOW_LEAVE_FULLSCREEN) &&
+                       window_fullscreen_followed(&g_screen, ev.type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN)) {
+                fullscreen_followed = 1;
+                screen_changed = 1; /* another size and maybe another refresh rate: redoes the pacing */
             }
 #ifdef PCE_APP_YS
             else if (ev.type == SDL_EVENT_WINDOW_FOCUS_LOST || ev.type == SDL_EVENT_WINDOW_FOCUS_GAINED)
@@ -3149,6 +3175,15 @@ int main(int argc, char **argv)
                 app_save_settings(config_path, &vol, skip_intro, pause_bg, &input_map, &g_screen.video);
 #endif
         } else if (screen_changed) {
+#ifdef PCE_APP_YS
+            if (fullscreen_followed) { /* the window changed by itself (window_fullscreen_followed): only the settings */
+                menu.video.fullscreen = menu.pending.fullscreen = g_screen.video.fullscreen;
+                if (config_path && !menu.open)
+                    app_save_settings(config_path, &vol, skip_intro, pause_bg, &input_map, &g_screen.video);
+            }
+#else
+            (void)fullscreen_followed;
+#endif
             screen_query_modes(&g_screen);
             screen_update_pacing(&g_screen, 0.0);
         }

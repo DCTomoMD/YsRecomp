@@ -42,6 +42,7 @@
 #include "app/pacing.h"
 #include "app/video.h"
 #include "app/volume.h"
+#include "host/host_paths.h"
 #include "pce/pce.h"
 #include "pce/psg.h"
 #include "util/u8file.h"
@@ -4228,6 +4229,50 @@ static void test_launcher(const char *dir)
     printf("launcher: %s\n", g_failures ? "with failures" : "ok");
 }
 
+/* Test host_paths: the resources are read from the executable's folder; the user's data (ini, saves, sessions) goes
+ * where the OS policy says (policy from the platform's CMake file): "exe" = next to the executable (Windows),
+ * "pref" = ~/Library/Application Support/<app id>/ (macOS, decision D3). Uses its own app id and removes what it wrote. */
+static void test_paths(const char *policy)
+{
+    const char *app_id = "YsRecompHostPathsTest";
+    const char *base = SDL_GetBasePath();
+    CHECK(base && *base, "SDL_GetBasePath: %s", SDL_GetError());
+    CHECK(host_paths_init(app_id) == 0, "host_paths_init");
+    const char *res = host_resource_dir(), *user = host_user_dir();
+    printf("paths: resources %s\npaths: user data %s\n", res, user);
+    CHECK(base && strcmp(res, base) == 0, "resources %s, expected the executable's folder %s", res, base ? base : "");
+    char want[1024] = "";
+    if (strcmp(policy, "exe") == 0) {
+        snprintf(want, sizeof(want), "%s", base ? base : "");
+    } else if (strcmp(policy, "pref") == 0) {
+        const char *home = SDL_getenv("HOME");
+        CHECK(home && *home, "no HOME");
+        snprintf(want, sizeof(want), "%s/Library/Application Support/%s/", home ? home : "", app_id);
+    } else {
+        CHECK(0, "unknown policy %s", policy);
+        return;
+    }
+    CHECK(strcmp(user, want) == 0, "user data %s, expected %s", user, want);
+    if (strcmp(policy, "pref") != 0)
+        return;
+    /* The folder exists and is writable; then removed (only what this test wrote) */
+    char file[1100];
+    snprintf(file, sizeof(file), "%shost_paths_test.ini", user);
+    FILE *f = u8_fopen(file, "wb");
+    CHECK(f != NULL, "cannot write %s", file);
+    if (f) {
+        fputs("fullscreen=0\n", f);
+        fclose(f);
+        f = u8_fopen(file, "rb");
+        char line[32] = "";
+        CHECK(f && fgets(line, sizeof(line), f) && strcmp(line, "fullscreen=0\n") == 0, "cannot read back %s", file);
+        if (f)
+            fclose(f);
+        CHECK(SDL_RemovePath(file), "cannot remove %s: %s", file, SDL_GetError());
+    }
+    CHECK(SDL_RemovePath(user), "cannot remove %s: %s", user, SDL_GetError());
+}
+
 int main(int argc, char **argv)
 {
     if (argc == 3 && strcmp(argv[1], "--fingerprint") == 0) {
@@ -4275,6 +4320,8 @@ int main(int argc, char **argv)
     } else if (argc == 3 && strcmp(argv[1], "launcher") == 0) {
         SDL_CreateDirectory(argv[2]);
         test_launcher(argv[2]);
+    } else if (argc == 3 && strcmp(argv[1], "paths") == 0) {
+        test_paths(argv[2]);
     } else if (argc == 2 && strcmp(argv[1], "fade") == 0) {
         test_fade();
     } else if (argc == 2 && strcmp(argv[1], "redraw") == 0) {
