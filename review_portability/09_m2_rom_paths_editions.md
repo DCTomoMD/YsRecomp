@@ -2,7 +2,7 @@
 
 - 作成日：2026-11-20。before（基準）：`18e1eaf`。PCERecomp（`external/PCERecomp`、`1b9d25a`）は変更していない。roms/ は読み取りのみ。
 - 表記：[C] 確認済み（macOS で実行して確かめた）、[W] Windows の実機での確認待ち、[A] 推測。
-- **Windows ではビルドも試験もしていない。** 6 章の手順で、M1 と同じ実機（`07a` の 3 章）で確かめる必要がある。
+- Windows の実機（`07a` の 3 章と同じ Windows 11 x64）で、6 章の手順で確かめた（2026-11-20、結果は 7 章。W1〜W10 すべて合格）。
 - 対応するリスク：R03（ROM の固定名）、R08（ヘッダーの `\` のパス）、R24（`recomp_disc_ys` の skip）。設計：`review_jp/02_build_layout.md` 2・5 章、`05_host_layer_design.md` の D5・D7。
 
 ---
@@ -83,9 +83,9 @@
 
 | ID | 内容 | 段階 |
 |---|---|---|
-| M2-1 | Windows で M2 の前後の動作が同じこと（6 章） | 実機（確認待ち） |
-| M2-2 | `build.ps1 -Edition` の動作（pwsh がないため macOS では未確認） | 実機（6 章の W6） |
-| M1-6 | `recomp_lockstep_ys` の 1 回目の失敗（M1 の前から）。**M2 の後で原因を特定**：書き出し先の `build/recomp_ys/` を作るものが CMake にも `ys_trace` にもなく、`ys_trace` は画像を書けないと何も言わずに終了コード 1 になる（`LOCKSTEP OK` の後、`dump_frame` の `save_ppm`）。新しいビルドでは、このフォルダに書く最初の試験がこれで、フォルダは後で Python の試験（`dialog_ys` の `os.makedirs`）が作る。2 回目と単独の実行ではフォルダがあるので合格する。macOS では `pce_trace`（同じ `dump_frame`）で、フォルダがないと `rc=1`、あると `rc=0` を確かめた [C]。終了コードで判定する試験は同じフォルダにほかに 22 本あるが、どれも後で動くので当たらなかったと見ている [A]。直し：`cmake/ys_edition.cmake` で構成のときに `file(MAKE_DIRECTORY …/recomp_ys)`（試験の定義は変わらない）。`ys_trace` は macOS ではまだ作れない（M3）ので、Windows の新しいビルドの全試験で 1 回目から合格することの確認が残る。画像を書けないときに知らせる直しは、ユーザーの承認を得て PCERecomp のフォーク（`DCTomoMD/PCERecomp`、ブランチ `trace-image-write-message`）で行った：`save_ppm` と `trace_save_ppm_argb` が `could not write the image <パス>` を出す（macOS の `pce_trace` で、フォルダがないと表示して `rc=1`、あると `rc=0`）| 直した（Windows で確認待ち） |
+| M2-1 | Windows で M2 の前後の動作が同じこと（6 章） | 解決（7 章、W1〜W5・W7） |
+| M2-2 | `build.ps1 -Edition` の動作（pwsh がないため macOS では未確認） | 解決（7 章の W6） |
+| M1-6 | `recomp_lockstep_ys` の 1 回目の失敗（M1 の前から）。**M2 の後で原因を特定**：書き出し先の `build/recomp_ys/` を作るものが CMake にも `ys_trace` にもなく、`ys_trace` は画像を書けないと何も言わずに終了コード 1 になる（`LOCKSTEP OK` の後、`dump_frame` の `save_ppm`）。新しいビルドでは、このフォルダに書く最初の試験がこれで、フォルダは後で Python の試験（`dialog_ys` の `os.makedirs`）が作る。2 回目と単独の実行ではフォルダがあるので合格する。macOS では `pce_trace`（同じ `dump_frame`）で、フォルダがないと `rc=1`、あると `rc=0` を確かめた [C]。終了コードで判定する試験は同じフォルダにほかに 22 本あるが、どれも後で動くので当たらなかったと見ている [A]。直し：`cmake/ys_edition.cmake` で構成のときに `file(MAKE_DIRECTORY …/recomp_ys)`（試験の定義は変わらない）。`ys_trace` は macOS ではまだ作れない（M3）ので、Windows の新しいビルドの全試験で 1 回目から合格することの確認が残る。画像を書けないときに知らせる直しは、ユーザーの承認を得て PCERecomp のフォーク（`DCTomoMD/PCERecomp`、ブランチ `trace-image-write-message`）で行った：`save_ppm` と `trace_save_ppm_argb` が `could not write the image <パス>` を出す（macOS の `pce_trace` で、フォルダがないと表示して `rc=1`、あると `rc=0`）| 解決（7 章の W8：Windows の新しいビルドで 1 回目から合格） |
 | M2-3 | 日本版の変数（`YS_JP_CUE`・`YS_JP_BIOS`）、試験名・ターゲット名の引数化、`profile`・`EQUIP` の引数、`.rc`・パッケージの版ごとの名前 | Phase 3B |
 | M2-4 | `equip_preview.py`・`equip_ice_preview.py`・`run_app_start_test.py`・`run_launcher_test.py`・`run_package_test.py`・`make_icon.py` の版の引数（CMake から明示の引数で呼ばれるので M2 では不要） | Phase 3B |
 | M2-6 | `run_bios_check.py` をセッションの指定なしで動かすと、BIOS なしで記録したセッション（`# bios: -`、32 本）に当たったところで「missing ... -: test skipped」（77）で止まる。M2 の前からの動作（before と after で同じ）。**M2 の後で解決**：BIOS なしのセッションは比べる相手（本物の BIOS での実行）がないので飛ばし、その本数を表示する。BIOS ありのセッションが 1 本も残らないときは 77（何も比べずに合格にはしない）。macOS では指定なし・`--frames 600` で BIOS ありの 8 本を比べて `RESULT: all equal`（終了コード 0）、BIOS なしだけを指定すると 77、`bios_c_ys` は合格。フレームの制限なしの全セッションは時間がかかるので未実行 | 解決（M2 の後） |
@@ -193,3 +193,28 @@ after は 4d575ff。サブモジュールはフォークの 2e86f2c）。
   変更せずに止めて報告してください。
 - 始める前に、判断が必要な質問をまとめて先に聞いてください。
 ```
+
+## 7. Windows の実機での確認の結果（2026-11-20、ユーザー実行）
+
+- 実機：`07a` の 3 章と同じ Windows 11 x64。before は `18e1eaf`。after は `0ab289c`（ビルドに効く中身は `4d575ff`。
+  サブモジュールはフォークの `2e86f2c`）。`ctest` は 6.1 の `$env:Path` の行で Build Tools の CMake を足して実行した。
+- after は `Remove-Item -Recurse -Force build` の後の新しいビルド（生成 C の作り直しから）。
+
+| ID | 結果 | 判定 |
+|---|---|---|
+| W1 | `YS_USA_CUE: C:/work/YsRecomp/roms/Ys Book I & II (USA).cue (SHA-1 ee92126a…)`、`YS_USA_BIOS: C:/work/YsRecomp/roms/[BIOS] TurboGrafx CD System Card (USA) (v2.0).pce (SHA-1 2bea3dac…)`。`roms\` 直下が選ばれ、cue の SHA-1 も macOS と同じ | 合格 [C] |
+| W2 | after の `Total Tests: 99`、`-L usa` は `81`、`host_layers` あり。`Compare-Object`（試験の名前）は何も出さない | 合格 [C] |
+| W3 | quick：before・after とも 21 本、失敗は `cpu_huc6280` だけ | 合格 [C] |
+| W4 | 全試験：before・after とも 89 本、最後まで失敗は `cpu_huc6280` だけ（`99% tests passed, 1 tests failed out of 89`）。skip は同じ 7 本 | 合格 [C] |
+| W5 | `-Package`：before・after とも `0 tests failed out of 2`。`dist\YsRecomp.zip` は 28519 KB → 28520 KB。`menu_font.bin`・`launcher_sfx.bin` が zip にない旨の注意は前後で同じ | 合格 [C] |
+| W6 | `.\build.ps1 -Edition jp` は `Edition 'jp' is not available yet (Phase 3B)` で止まる | 合格 [C] |
+| W7 | `before_bios.txt` と `after_bios.txt` は `Compare-Object` で差なし（`RESULT: all equal in every session`）。`check_all_sessions.py --help` に `--edition`・`--cue`・`--bios`。`run_bios_check.py --edition jp` は `edition 'jp' is not available yet (Phase 3B); available: usa` | 合格 [C] |
+| W8 | before は `recomp_lockstep_ys ***Failed`（1 回目、2 回目で合格：M1-6）。after は `Start 29` が 1 回、`Test #29: recomp_lockstep_ys ... Passed 23.43 sec` の 1 行だけ。`Test-Path build\recomp_ys` は `True` | 合格 [C]（M1-6 は解決） |
+| W9 | `build` を消した後の `.\build.ps1` が `Built.`。`games\ys\generated\c\*.c` は 25 本 | 合格 [C] |
+| W10 | `after_gen_hash.txt` は `9f8978190fba1dde`（macOS と同じ。10 の 8 章） | 合格 [C] |
+
+- 前後とも失敗した試験（実機の環境が原因）：`cpu_huc6280` だけ。`reference/huc6280-tests` が Windows にない
+  （`Test-Path ..\PCERecomp\reference` は False）ため（R21）。M2 とは関係ない。`reference/` は M3-8 で入れる（10 の Q2）。
+- skip（前後で同じ 7 本）：`trace_ys_boot`、`trace_ys_run`、`session_ys_boot`、`session_ys_game`、`session_ys_save`、
+  `perf_ys`、`cd_image`。どれも M2 の前からで、`reference/`（Geargrafx・`gg_cdinfo`）がないことによる [A]。skip は合格ではない。
+- M2 が原因と考えられる違いはない。**M2 は完了**（M2-1、M2-2、M1-6 は解決。M2-3・M2-4 は Phase 3B）。
