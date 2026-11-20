@@ -95,7 +95,11 @@
 
 M1 と同じ実機・同じ手順（`07a` の 3.2：ctest を直接実行、`Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`）。
 ROM と BIOS は今までどおり `roms\` 直下に上流の名前で置いたまま（M2 の既定値はこの場所を最初に見る）。before は `18e1eaf`、
-after は M2 のコミット（以下 `<M2>`）。runtime の C は変えていないので、C8（アイコン）と C9（GPU）は不要。
+after は `c65b3ad`（M2 の `6381c28` に、M2-6・M2-5・M1-6 の直しと、PCERecomp をフォークにした変更を足したもの）。
+runtime の C は変えていないので、C8（アイコン）と C9（GPU）は不要。
+
+`c65b3ad` からサブモジュールの URL がフォーク（`DCTomoMD/PCERecomp`、`2e86f2c`）に変わった。after に切り替えたら
+`git submodule sync` を `git submodule update` の前に実行する（しないと上流から `2e86f2c` を探して失敗する）。
 
 ### 6.1 before（`18e1eaf`）
 
@@ -114,11 +118,13 @@ python tools\trace\run_bios_check.py games\ys\sessions\session_20261017_161116.t
 
 期待：`18e1eaf`、`host_layers` が出る、`Total Tests: 99`。`-L usa` は `Total Tests: 0`（ラベルがまだない）。
 
-### 6.2 after（`<M2>`）
+### 6.2 after（`c65b3ad`）
 
 ```powershell
-git checkout feature/japanese-disc-support; git submodule update
-git log --oneline -1                                   # -> <M2>
+git checkout feature/japanese-disc-support; git pull
+git submodule sync; git submodule update
+git log --oneline -1                                   # -> c65b3ad
+git -C external/PCERecomp log --oneline -1             # -> 2e86f2c
 Remove-Item -Recurse -Force build
 .\build.ps1
 cmake -S . -B build | Select-String "YS_USA_"          # cmake が PATH にないときは Build Tools の cmake.exe をフルパスで
@@ -146,6 +152,7 @@ python tools\trace\run_bios_check.py --edition jp *>> after_tools.txt
 | W5 | パッケージ | `app_package_ys`、`app_launcher_ys` が合格。`dist\YsRecomp\` と `dist\YsRecomp.zip` ができる（大きさは M1 の after とほぼ同じ） |
 | W6 | `-Edition jp` | `Edition 'jp' is not available yet (Phase 3B)` で止まる |
 | W7 | ツール | `before_bios.txt` と `after_bios.txt` の表と `RESULT` 行が同じ（macOS では `cd_read $E009 7 7 0 0`、`RESULT: all equal in every session`）。`check_all_sessions.py --help` に `--edition`・`--cue`・`--bios` がある。`run_bios_check.py --edition jp` は `not available yet` |
+| W8 | M1-6 の直し | `Select-String "recomp_lockstep_ys" after_testall.txt` で `recomp_lockstep_ys` の `Passed` の行が 1 つだけ（1 回目で合格）。`build\recomp_ys` が構成の直後からある |
 
 - `recomp_lockstep_ys` が 1 回目に失敗し 2 回目に合格するのは M1-6（M2 の前から）。before では判定に使わない。after
   （M1-6 の直しを含むコミット）では新しいビルドの全試験で 1 回目から合格するはずなので、`after_testall.txt` に
@@ -163,17 +170,19 @@ Select-String -Path before_*.txt, after_*.txt -Pattern "tests passed|\*\*\*Faile
 ```
 CLAUDE.md（上流の本文と作業規則 v2）を読んでください。次に review_portability/09_m2_rom_paths_editions.md を読んでください。
 
-M2 の Windows での確認を、07a の 3 章と同じ Windows 11 x64 の実機で、09 の 6 章の手順で行いました（before は 18e1eaf）。
+M2 の Windows での確認を、07a の 3 章と同じ Windows 11 x64 の実機で、09 の 6 章の手順で行いました（before は 18e1eaf、
+after は c65b3ad。サブモジュールはフォークの 2e86f2c）。
 
-結果（m2_results.txt の中身、Compare-Object の出力、W1 の構成の表示）：
+結果（m2_results.txt の中身、Compare-Object の出力、W1 の構成の表示、W8 の Select-String の出力）：
 （ここに貼る）
 
 お願い：
-- W1〜W7 のチェックポイントごとに、合格・不合格・判断できない を表にしてください。before と after の両方で失敗した
+- W1〜W8 のチェックポイントごとに、合格・不合格・判断できない を表にしてください。before と after の両方で失敗した
   試験は実機の環境が原因として分けてください。
 - M2 が原因と考えられる違いがあれば、原因を調べ、修正案を出してください。修正は承認を得てから行い、M3 には進まないでください。
 - 結果を review_portability/09_m2_rom_paths_editions.md に記録し（5 章の M2-1・M2-2 の状態も更新）、コミットのコマンドを
   示して止まってください。
-- roms/ は読み取り専用です。サブモジュール external/PCERecomp に変更が必要になったら、変更せずに止めて報告してください。
+- roms/ は読み取り専用です。サブモジュール external/PCERecomp（フォーク DCTomoMD/PCERecomp）に変更が必要になったら、
+  変更せずに止めて報告してください。
 - 始める前に、判断が必要な質問をまとめて先に聞いてください。
 ```
