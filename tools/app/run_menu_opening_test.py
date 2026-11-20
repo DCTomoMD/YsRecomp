@@ -80,7 +80,7 @@ def main():
     shutil.rmtree(dump, ignore_errors=True)
     os.makedirs(dump)
     r = run(exe, [cue, "--config", ini, "--save", os.path.join(work, "image.brm"), "--turbo", "--frames", "600",
-                  "--window-size", "960", "540", "--screen-dump", "590", "1", dump])
+                  "--window-size", "960", "540", "--screen-dump", "590", "1", dump, "--screen-dump-wait"])
     shots = sorted(glob.glob(os.path.join(dump, "*.bmp")))
     if r.returncode != 0 or not shots:
         print(f"FAILED: no image (code {r.returncode})\n{r.stderr[-300:]}")

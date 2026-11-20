@@ -27,6 +27,8 @@
  *   --motion-cpu (YsRecomp, test) starts with smooth motion drawn on the CPU (like F6)
  *   --frame-timing  on exit, shows how long each frame stayed on screen (refreshes and ms)
  *   --screen-dump FROM COUNT FOLDER  saves (BMP) each image shown in the window in frames FROM..FROM+COUNT-1
+ *   --screen-dump-wait  (test, with --turbo) the game waits, in those frames, until the window has saved an image of
+ *                       each one (without it, the window draws what it can and may skip exactly those frames)
  *   --walk-rhythm FROM TO  (YsRecomp) on exit, Adol's on-screen rhythm in frames FROM..TO-1 (app/motion.h)
  *   --window-size W H  (test) the window with W x H pixels instead of the window_scale size (e.g. 16:9 for
  *                fill with the HUD at 3/4)
@@ -399,6 +401,26 @@ typedef struct Emu {
 } Emu;
 
 static Emu g_emu;
+
+/* --screen-dump-wait: the frames FROM..FROM+COUNT-1 of --screen-dump, and the last frame the window saved an image of
+ * (written by the window, read by the game thread) */
+static struct {
+    int on;
+    long from, to;
+    SDL_AtomicInt saved;
+} g_dump_wait;
+
+/* Game thread, with --turbo: before running past a frame of --screen-dump, waits (at most 2 s) for the window to save it */
+static void dump_wait(void)
+{
+    long q = g_emu.frame_seq;
+    if (!g_dump_wait.on || q < g_dump_wait.from || q >= g_dump_wait.to)
+        return;
+    Uint64 t0 = SDL_GetTicksNS();
+    while (SDL_GetAtomicInt(&g_dump_wait.saved) < (int)q && !SDL_GetAtomicInt(&g_emu.quit) &&
+           SDL_GetTicksNS() - t0 < 2000000000ull)
+        SDL_DelayNS(500000);
+}
 
 /* Recorded session (--record or record_sessions=1 in the settings): the buttons frame by frame, in the test
  * script format. The file is rewritten every minute of play (by the game thread, the only one that touches the
@@ -918,6 +940,8 @@ static int SDLCALL emu_thread(void *data)
         if (window_stalled && !SDL_GetAtomicInt(&g_emu.screen_paced))
             window_stalled = 0; /* pacing is no longer by the screen (option changed): clock */
         if (fast) {
+            if (g_emu.turbo)
+                dump_wait();
             next_frame = SDL_GetTicksNS();
         } else if (SDL_GetAtomicInt(&g_emu.screen_paced) && !window_stalled) {
             /* No signal for ~2 frames: the window is stuck. The wait fits comfortably within the sound
@@ -1250,6 +1274,7 @@ static void screen_dump(SDL_Renderer *r)
     SDL_Surface *shot = SDL_RenderReadPixels(r, NULL);
     if (!shot)
         return;
+    SDL_SetAtomicInt(&g_dump_wait.saved, (int)q); /* --screen-dump-wait: the game may go on */
     char path[1024];
     snprintf(path, sizeof(path), "%s/%c%06ld_%ld.bmp", g_dump.dir, g_dump.menu ? 'm' : 'q', q, g_dump.n);
     /* Kept in memory and written at the end (screen_dump_flush): writing to disk in the middle of the game delayed the window,
@@ -2488,7 +2513,12 @@ int main(int argc, char **argv)
             g_dump.from = strtol(argv[i + 1], NULL, 10);
             g_dump.count = strtol(argv[i + 2], NULL, 10);
             g_dump.dir = argv[i + 3];
+            g_dump_wait.from = g_dump.from;
+            g_dump_wait.to = g_dump.from + g_dump.count;
+            SDL_SetAtomicInt(&g_dump_wait.saved, -1);
             i += 3;
+        } else if (strcmp(argv[i], "--screen-dump-wait") == 0) {
+            g_dump_wait.on = 1;
         } else if (strcmp(argv[i], "--window-size") == 0 && i + 2 < argc) {
             g_window_w = (int)strtol(argv[i + 1], NULL, 10);
             g_window_h = (int)strtol(argv[i + 2], NULL, 10);

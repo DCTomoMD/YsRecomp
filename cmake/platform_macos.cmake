@@ -10,6 +10,10 @@ endif()
 # No FMA contraction, so the floating-point results match the Windows build (decision D4)
 add_compile_options(-ffp-contract=off)
 
+# Apple's linker warns when a library appears twice on a link line (pce_core comes directly and again through pce_app);
+# it links it once either way, so the warning says nothing about the result (M3-3)
+add_link_options(-Wl,-no_warn_duplicate_libraries)
+
 # Host layer (runtime/host): no macOS implementation yet (null: no refresh time, no GPU time, no priority change)
 set(PLATFORM_HOST_SOURCES
     runtime/host/null/display_timing_null.c

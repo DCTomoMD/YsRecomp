@@ -474,6 +474,9 @@ static int menu_key_do(Menu *m, MenuKey key)
     case MENU_KEY_BACK:
         m->open = 0;
         return MENU_CLOSED;
+    case MENU_KEY_LEFT:
+    case MENU_KEY_RIGHT:
+        break; /* the main page has no values to change */
     }
     return 0;
 }

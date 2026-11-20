@@ -186,3 +186,98 @@ python -c "import hashlib,glob,os;h=hashlib.sha256();[h.update(os.path.basename(
   （`ys_trace_ext.c:1546`）、`runtime/app/gpu_draw.c` で GPU に組み立てさせた画像を、CPU の `motion_render` の画像と点ごとに
   比べる [C]。これが macOS で合格したので、隠したウィンドウでも GPU で描けて、CPU と同じ画像になる [C]。どの renderer
   （macOS の既定は Metal）が選ばれたかは表示されない [A]。R20 は `ys_trace` の範囲では問題なし。`YsRecomp` の窓（R14・R20）は M3-3 で確かめる。
+
+## 10. M3-3 の結果（2026-11-21、macOS arm64）
+
+- コードと CMake は変えていない。`runtime/main.c` は**変更なしで** macOS でコンパイルできた。
+
+| 実行したこと | 結果 |
+|---|---|
+| `scripts/build.sh --target YsRecomp --target pce_runtime`（`YsRecomp`・`pce_app`・`pce_runtime` のオブジェクトを消して作り直し、警告を全部見た） | 成功。`YsRecomp` は `Mach-O 64-bit executable arm64`（70 MB）。警告は 2 種類：`runtime/app/menu.c:448` の `-Wswitch`（M1 から既知）、リンカーの `ignoring duplicate libraries: libpce_core.a`（`ys_trace`・`YsRecomp`・`pce_runtime` の 3 つ。9 章）。M1 で見た SDL の非推奨 API の警告は、ここでは出なかった [C] |
+| `YsRecomp` を使う試験 19 本のうち、パッケージの 2 本を除く 17 本（`-j 4`。`RUN_SERIAL` は 1 本ずつ） | **16 本合格、1 本失敗（`app_menu_intro_ys`）**、skip 0（12 分 49 秒）[C] |
+| `app_launcher_ys`（`package` ラベルだが、パッケージは使わない） | 合格（ランチャーの表紙の画像を `stb_image` で読む）[C] |
+
+- 合格した 16 本：`dialog_ys`、`app_start_ys`、`app_menu_ys`、`app_menu_image_ys`、`app_stall_ys`、`app_mark_ys`、
+  `app_stall_device_ys`、`app_hiccup_ys`、`app_menu_chip_ys`、`app_intro_ys`、`app_crop_ys`、`app_torn_window_ys`、
+  `app_load_no_border_ys`、`app_rhythm_sewer_ys`、`app_prep_ys`、`app_ring_list_ys`。実時間の試験（`TESTS_TEMPO_REAL`）も、しきい値はそのまま。
+- 残したもの：`app_package_ys`（M3-6）。
+
+### 10.1 `app_menu_intro_ys` の失敗（M3-3-1）
+
+- 症状：試験の前半（イントロ中にメニューが開かないこと）は合格した。後半の「`--turbo --frames 600 --screen-dump 590 1`
+  で 590 フレーム目の窓の画像を 1 枚とる」で、画像が 1 枚も書かれない（`FAILED: no image (code 0)`）。単独で 3 回とも失敗 [C]。
+- 原因：
+  - `--turbo` では、ゲームは窓を待たずに進み、窓は「描けるだけ描く」（`runtime/main.c` の 15 行目の説明）。
+  - `--screen-dump` は、窓が実際に描いた画像だけを保存する（`screen_dump`、1243 行目）。
+  - macOS の Metal の窓は、turbo の 600 フレームのうち 126 フレームしか描かなかった（約 80 枚／秒。ゲームは約 400 フレーム／秒）[C]。
+    隠した窓でも見える窓でも同じ程度（129 と 79）[C]。
+  - 590 フレーム目がちょうど描かれる確率が低く、手で 6 回動かすと書かれたのは 1 回だけだった [C]。
+  - 比べるために SDL の描画方式を替えると、OpenGL は 581 フレーム、software は 155 フレームを描いた [C]。Metal の窓は、
+    V-Sync を切っても、表示のための画像（drawable）が返ってくる速さで止まると見ている [A]。
+  - Windows ではこの試験は毎回合格している（07a、09 の 7 章）。Direct3D の窓がほぼ毎フレームを描くためと見ている [A]。
+- 試験の期待値は変えていない。直し方は承認待ち（下の Q9）。
+
+### 10.2 リスクの状態
+
+| ID | 結果 |
+|---|---|
+| R10（game スレッドのスタック） | `SDL_CreateThread(emu_thread, "game", NULL)` はスタックの大きさを指定しない（macOS の既定は 512 KB、Windows は 1 MB [A]）。17 本の試験（長いセッションを含む）で溢れなかった [C]。大きさをそろえるかは Q11 |
+| R13（Retina） | 窓は `SDL_WINDOW_HIGH_PIXEL_DENSITY` なしで作られる。`--window-size 960 540` の画像は 960×540 [C]。Retina の画面では macOS が拡大して表示する（くっきりさせるかは M3 の後の任意の改良） |
+| R14・R20（Metal、隠した窓） | 隠した窓でも Metal で描けて、画像を読み出せた（`app_menu_image_ys`、`app_crop_ys` などが合格）[C]。ただし turbo で描ける枚数が少ない（10.1） |
+| R19（`stb_image`） | `app_launcher_ys` が合格 [C] |
+
+### 10.3 決めていただくこと
+
+| ID | 質問 | 案（推奨を先に） |
+|---|---|---|
+| Q9 | `app_menu_intro_ys` の直し方 | **案 A（推奨）**：`--screen-dump` を指定したときだけ、ゲームが保存する範囲のフレームを、窓が描くまで待つ（`runtime/main.c`。プレイヤーの動作は変わらない。OS によらず、指定したフレームが必ず保存される）。ほかの `--screen-dump` の試験（`app_load_frame` 系、`app_menu_under` 系）も同じ道具を使うので、Windows で前後の比較が要る。<br>案 B：試験の側で、590 の 1 枚ではなく、終わりの近くの範囲を保存して最後の 1 枚を見る（期待値の数は同じだが、試験の中身を変えることになる）。<br>案 C：macOS だけ、試験の窓を OpenGL にする（OS ごとの抜け道になるので推奨しない） |
+| Q10 | 警告の扱い（E1） | **`-Wswitch`**：`menu.c:448` の `switch` に、足りない 2 つ（`MENU_KEY_LEFT`、`MENU_KEY_RIGHT`）を何もしない分岐として書く（動作は変わらない）。<br>**リンカーの注意**：`platform_macos.cmake` で `-Wl,-no_warn_duplicate_libraries` を付ける（同じライブラリが 2 回並ぶことへの注意だけを消す。理由をコメントに書く）。どちらも Windows には影響しない |
+| Q11 | game スレッドのスタック | **今は変えない**（溢れた形跡はない）。M3-8 の history の 10 本でも溢れなければ、そのまま閉じる。<br>別案：Windows と同じ 1 MB を `SDL_PROP_THREAD_CREATE_STACKSIZE_NUMBER` で指定する |
+
+**2026-11-21：ユーザーの回答は「全部推奨で」。** Q9 の案 A は、実装の前に次の 1 点を変えた：
+- `--screen-dump` を指定しただけでゲームが待つようにすると、`app_menu_image_ys`（`run_menu_under_test.py`）が弱くなる。
+  この試験は、ゲームが窓より先のフレームにいる状態（出力の `with the console on a newer frame than the one shown`）を
+  `--screen-dump` で見ているため。
+- そのため、待つのは新しいオプション **`--screen-dump-wait`** を付けたときだけにし、`app_menu_intro_ys` だけがそれを使う。
+
+### 10.4 直したこと
+
+| ファイル | 変更 |
+|---|---|
+| `runtime/main.c` | `--screen-dump-wait`（試験用、`--turbo` のとき）：ゲームのスレッドは、`--screen-dump` の範囲のフレームを、窓がそのフレームの画像を保存するまで先に進めない（最大 2 秒。`dump_wait()`、`g_dump_wait`）。窓は `screen_dump` で画像を読んだ後に、そのフレームの番号を知らせる（`SDL_AtomicInt`）。オプションを付けなければ、今までと同じ動き。プレイヤーの動作は変わらない |
+| `tools/app/run_menu_opening_test.py` | 後半の実行に `--screen-dump-wait` を足した。期待値（`lit < 10000`、`white <= 200` で失敗）は変えていない |
+| `runtime/app/menu.c` | メインのページの `switch` に `MENU_KEY_LEFT`・`MENU_KEY_RIGHT`（何もしない）を足した。`-Wswitch` が消える。動作は今と同じ（前も `switch` を抜けて `return 0`） |
+| `cmake/platform_macos.cmake` | `add_link_options(-Wl,-no_warn_duplicate_libraries)`。Apple の `ld` の「同じライブラリが 2 回」の注意だけを消す（`pce_core` は直接と `pce_app` 経由の 2 回並ぶが、リンクは 1 回）。理由をコメントに書いた。Windows には入らない |
+
+### 10.5 直した後の macOS の結果
+
+| 実行したこと | 結果 |
+|---|---|
+| `scripts/build.sh`（全ターゲット） | 成功。**警告 0**（`menu.c`・`main.c` を作り直し、すべて再リンク）[C]。`pce_trace.c:456` の `-Wformat` は、PCERecomp のファイルを今回作り直していないので出ていない（残っている） |
+| `app_menu_intro_ys` を単独で 3 回 | 3 回とも合格。毎回 `20812 lit pixels, white 255`（同じ値）[C] |
+| `YsRecomp` の試験 18 本（`app_launcher_ys` を含む、`-j 4`） | **18 本すべて合格**、skip 0（12 分 49 秒）。`app_menu_image_ys` も合格 [C] |
+| quick（21 本） | 20 本合格。失敗は `cpu_huc6280` だけ（`reference/` がない、R21。M3-7）[C] |
+
+- `ys_trace` の 42 本は、今回は再リンクだけ（`main.c` は `ys_trace` に入らない）なので、再実行していない。
+
+### 10.6 Windows で確かめること（`runtime/main.c`・`menu.c` と試験のスクリプトを変えたため）
+
+before は `4a92ba8`（M3-2）、after は M3-3 のコミット。09 の 6 章と同じ実機と手順（`$env:Path` に Build Tools の CMake）。
+
+```powershell
+git checkout 4a92ba8; git submodule update
+.\build.ps1
+ctest --test-dir build -C Release -LE history -j 2 --repeat until-pass:2 *> before_m33_testall.txt
+git checkout feature/japanese-disc-support; git pull; git submodule update
+.\build.ps1 *> after_m33_build.txt
+ctest --test-dir build -C Release -LE history -j 2 --repeat until-pass:2 *> after_m33_testall.txt
+ctest --test-dir build -C Release -R "^(app_menu_intro_ys|app_menu_image_ys)$" -V *> after_m33_menu.txt
+Select-String -Path before_m33_*.txt, after_m33_*.txt -Pattern "tests passed|\*\*\*Failed|warning|lit pixels|newer frame" |
+  ForEach-Object { "$($_.Filename): $($_.Line.Trim())" } | Set-Content -Encoding utf8 m33_results.txt
+```
+
+| ID | 確かめること |
+|---|---|
+| X1 | `after_m33_build.txt` に新しい警告がない（`menu.c` の `switch` を MSVC でもコンパイル） |
+| X2 | 全試験：before・after とも 89 本、最後まで失敗は `cpu_huc6280` だけ、skip は同じ 7 本 |
+| X3 | `app_menu_intro_ys` が合格し、`lit pixels` の行が出る。`app_menu_image_ys` が合格（`newer frame` の行の数は前と同じでなくてよい） |
