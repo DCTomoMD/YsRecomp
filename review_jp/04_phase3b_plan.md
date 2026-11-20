@@ -91,6 +91,8 @@
 
 ## 5. 始める前に決めていただくこと
 
+**2026-11-20：ユーザーの回答は「全部推奨で」。Q1〜Q8 はすべて「案（推奨）」の列のとおりに決定。**
+
 | ID | 質問 | 案（推奨） |
 |---|---|---|
 | Q1 | 日本版のディスクの識別値（`03` の 3.2 で確認済み）を **3B で `profile_jp.c` の `disc` に入れる**か、3C まで NULL（明示の文で拒否）にするか | **3B で入れる**。値は [C] で、3B-5 の BIOS の流れを本物のディスクで端から端まで確かめられる。入れないと `YsIandII_JP` はディスクを受け付けず、E3 を合成のデータでしか確かめられない |
@@ -140,3 +142,33 @@
 | H4 | 版ごとのアイコン | Q4 |
 
 3C 以降に残るもの：R2-2〜R2-7、U6・U7・U12・U13 の残り、`disc.toml` と生成 C、機能の有効化、日本版のセッション。
+
+---
+
+## 9. 3B-0 の結果（2026-11-20、macOS arm64、`pce_trace` のみ）
+
+実行したこと（出力の画像と状態のファイルは作業用フォルダに置き、Git には入れていない）：
+
+```
+build/Release/pce_trace --frame --bios roms/bios/syscard3.pce "roms/jp/Ys I & II (Japan).cue" 3600 ... --every 120 ... --hashes ...
+build/Release/pce_trace --frame --input tests/input/ys_game.txt --bios roms/bios/syscard3.pce "roms/jp/Ys I & II (Japan).cue" 9000 ... --every 300 ... --hashes ...
+build/Release/pce_trace --frame --input tests/input/ys_game.txt --bios roms/bios/syscard3.pce "roms/jp/Ys I & II (Japan).cue" 6000 ... --dump-state ...
+```
+
+| 見たこと | 結果 | 状態 |
+|---|---|---|
+| ボタンなし 3600 フレーム | 終了コード 0。System Card 3.0 のタイトル画面（`VER. 3.00`）が出て、RUN を待つ点滅を 32 フレームごとに繰り返す | [C] |
+| RUN を押す（北米版の試験と同じボタンの台本 `tests/input/ys_game.txt`）9000 フレーム | 終了コード 0、`FAILED` の行なし、CD の音楽 35.4 秒・ADPCM 3.9 秒。著作権の画面 → タイトル画面（Beginning / Continue）→ 新しいゲーム → 船の上の場面に進み、仮名と漢字の会話の窓が出る（BIOS のフォントで描かれる） | [C] |
+| 6000 フレームの RAM | 日本版の GOLD の番地（`03` の 6.2 の [C]）に 1000、EXP の番地に 0。画面の `GOLD 01000`、`EXP 00000` と合う | [C]（番地の意味を実行で確かめた） |
+| R2-1：PCERecomp で System Card 3.0 が起動するか | **起動する。PCERecomp の変更は不要**（少なくともゲームの最初の場面まで） | [C] |
+| U11：`region_japan` | 0 のまま（どこからも設定されない）でゲームまで進む | [C]（この範囲で） |
+
+**煙試験の案（`jp_boot_ysjp`。3B-1 で CMake の `YS_JP_CUE`・`YS_JP_BIOS` と一緒に作る。承認を得てから）**：
+- 実行：`pce_trace --frame --input <ボタンの台本> --bios ${YS_JP_BIOS} ${YS_JP_CUE} 6000 <画像> --dump-state <状態>`
+- 合格の条件（小さな Python スクリプトで判定。画像の要約値は使わない、6 章 K5）：
+  1. 終了コード 0、`FAILED` の行がない
+  2. `disc music played` が 0 秒より長い
+  3. 状態の RAM で、日本版の GOLD の番地が 1000（新しいゲームの所持金。画面の表示と合うことを上で確かめた）
+- ボタンの台本：`tests/input/ys_game.txt` はボタンだけの北米版のファイルなので、日本版用に同じ中身の
+  `tests/input/ys_jp_boot.txt`（案）を作り、日本版で確かめたことをコメントに書く
+- ROM がないときは 77（skip）。ラベル `jp`、`console`
