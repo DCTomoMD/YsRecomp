@@ -268,7 +268,7 @@ def main():
     pce_trace, cue, bios = (os.path.abspath(a) for a in sys.argv[1:4])
     out = sys.argv[4] if len(sys.argv) > 4 else os.path.join(ROOT, "games", "ys", "generated", "equip_preview.html")
     if not (os.path.exists(cue) and os.path.exists(bios)):
-        print("equip_preview: no disc or BIOS in roms\\ (skipped)")
+        print(f"equip_preview: missing disc or BIOS ({cue} / {bios}; skipped)")
         return 77
     with tempfile.TemporaryDirectory() as tmp:
         sets, pal, masks = load_frames(pce_trace, cue, bios, tmp)

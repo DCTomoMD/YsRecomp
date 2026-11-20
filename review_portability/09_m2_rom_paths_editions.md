@@ -89,7 +89,7 @@
 | M2-3 | 日本版の変数（`YS_JP_CUE`・`YS_JP_BIOS`）、試験名・ターゲット名の引数化、`profile`・`EQUIP` の引数、`.rc`・パッケージの版ごとの名前 | Phase 3B |
 | M2-4 | `equip_preview.py`・`equip_ice_preview.py`・`run_app_start_test.py`・`run_launcher_test.py`・`run_package_test.py`・`make_icon.py` の版の引数（CMake から明示の引数で呼ばれるので M2 では不要） | Phase 3B |
 | M2-6 | `run_bios_check.py` をセッションの指定なしで動かすと、BIOS なしで記録したセッション（`# bios: -`、32 本）に当たったところで「missing ... -: test skipped」（77）で止まる。M2 の前からの動作（before と after で同じ）。**M2 の後で解決**：BIOS なしのセッションは比べる相手（本物の BIOS での実行）がないので飛ばし、その本数を表示する。BIOS ありのセッションが 1 本も残らないときは 77（何も比べずに合格にはしない）。macOS では指定なし・`--frames 600` で BIOS ありの 8 本を比べて `RESULT: all equal`（終了コード 0）、BIOS なしだけを指定すると 77、`bios_c_ys` は合格。フレームの制限なしの全セッションは時間がかかるので未実行 | 解決（M2 の後） |
-| M2-5 | `equip_ice_preview.py` / `equip_preview.py` の skip の文（`no disc or BIOS in roms\`）は古い言い方のまま（542cf5a の文は CMake 側だけ直した） | 3B でまとめて |
+| M2-5 | `equip_ice_preview.py` / `equip_preview.py` の skip の文（`no disc or BIOS in roms\`）は古い言い方のまま（542cf5a の文は CMake 側だけ直した）。**M2 の後で解決**：`missing disc or BIOS (<disc> / <BIOS>; skipped)` と、見つからなかったパスを出す（終了コード 77 と合格の条件は変えない）。macOS では存在しないパスで 77、ROM ありで `equip_preview_ys`・`equip_ice_preview_ys` とも合格 | 解決（M2 の後） |
 
 ## 6. Windows の実機での確認手順
 
