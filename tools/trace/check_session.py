@@ -9,8 +9,11 @@ Our side's sound uses Geargrafx's fade (--gg-fader), so the comparison is valid 
 Geargrafx's output is reused while nothing changes (gg_cache.py). The session_* tests use compare()
 (tools/trace/run_session_test.py).
 
-Usage: python tools/trace/check_session.py <session.txt> [--frames N] [--work <folder>]
-       (game, BIOS and number of frames come from the session header; --frames limits)
+Usage: python tools/trace/check_session.py <session.txt> [--frames N] [--work <folder>] [--edition usa]
+                                            [--cue <disc>] [--bios <system card>]
+       (game, BIOS and number of frames come from the session header; --frames limits. The header's paths are
+       resolved on this machine by tools/editions.py; --cue/--bios replace them. The edition comes from the header's
+       "# edition:" line, usa for sessions without it)
 Exit: 0 = all equal, 1 = different, 2 = usage error.
 """
 import argparse
@@ -23,8 +26,8 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.dirname(HERE))
 import pcerecomp_dir  # noqa: E402
 import build_paths  # noqa: E402
+import editions  # noqa: E402
 GG = pcerecomp_dir.GG_TRACE
-OURS = build_paths.exe("pce_trace")
 sys.path.insert(0, HERE)
 sys.path.insert(0, pcerecomp_dir.TRACE_TOOLS)
 import gg_cache  # noqa: E402
@@ -83,22 +86,29 @@ def main():
     ap.add_argument("session")
     ap.add_argument("--frames", type=int)
     ap.add_argument("--work", default=os.path.join(ROOT, "build", "sessions"))
-    ap.add_argument("--ours", default=OURS,
-                    help="our executable (default: pce_trace, interpreter only; e.g. build/Release/ys_trace "
-                         "for the recompiled code)")
+    ap.add_argument("--ours",
+                    help="our executable (default: the edition's pce_trace, interpreter only; e.g. "
+                         "build/Release/ys_trace for the recompiled code)")
     ap.add_argument("--hle", action="store_true",
                     help="our side uses the BIOS routines rewritten in C (runtime/bios/hle.h)")
     ap.add_argument("--hle-only", help="only these C routines (hex entries separated by commas)")
+    ap.add_argument("--edition", help="the session's edition when its header has none (default usa)")
+    ap.add_argument("--cue", help="the disc to use instead of the header's")
+    ap.add_argument("--bios", help="the System Card to use instead of the header's (only for sessions with one)")
     a = ap.parse_args()
-    ours_exe = os.path.abspath(a.ours)
 
     info = read_header(a.session)
+    ed = editions.session_edition(info, a.edition)
+    ours_exe = os.path.abspath(a.ours or build_paths.exe(ed.ptrace))
     game = info.get("game")
     bios = info.get("bios", "-")
     frames = a.frames or int(info.get("frames", "0"))
     if not game or frames <= 0:
         print("session header without 'game' or 'frames'")
         return 2
+    game = editions.header_path(game, ed, a.cue)
+    if bios != "-":
+        bios = editions.header_path(bios, ed, a.bios)
     for exe in (GG, ours_exe):
         if not os.path.exists(exe):
             print(f"{exe} not found: build first (build.ps1 and PCERecomp\\tools\\reference_trace\\build.ps1)")
@@ -122,7 +132,7 @@ def main():
     if bios != "-":
         common += ["--bios", bios]
     if info.get("save"):
-        common += ["--bram", info["save"]]  # the session started from this save (CD save memory)
+        common += ["--bram", editions.normalize(info["save"])]  # the session started from this save (CD save memory)
     print(f"Checking {frames} frames ({frames / 59.82 / 60:.1f} min of play) of {a.session} ...", flush=True)
     ours_opts = ["--gg-fader"] + (["--hle"] if a.hle else []) + (["--hle-only", a.hle_only] if a.hle_only else [])
     return compare(GG, ours_exe, game, frames, common, ours_opts, work)

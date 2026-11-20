@@ -10,12 +10,27 @@
 #        -Verbose               -> show everything (full build and test output)
 #        -VsPath FOLDER         -> another Visual Studio 2022 installation (the CI's Enterprise, found with
 #                                  vswhere); without it, the Build Tools in their usual folder
+#        -Edition usa|jp|all    -> edition of the game (default all: every edition whose disc and BIOS were found,
+#                                  today only usa). The tests of the other editions are left out (common tests
+#                                  always run); -Package builds the chosen editions' packages. jp: Phase 3B.
+#                                  Which editions exist depends only on the disc and BIOS (YS_USA_CUE, YS_USA_BIOS;
+#                                  cmake/ys_edition.cmake), not on this option.
 # Without -Verbose, only build warnings and errors and the test summary (how many passed and which
 # failed) are shown. To see the output of a failed test:
 #   ctest --test-dir build -C Release -R <name> --output-on-failure
 param([switch]$Test, [switch]$TestAll, [switch]$TestHist, [switch]$Package, [switch]$Verbose,
-      [string]$VsPath = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools')
+      [string]$VsPath = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools',
+      [ValidateSet('usa', 'jp', 'all')][string]$Edition = 'all')
 $ErrorActionPreference = 'Stop'
+
+# Editions (tools/editions.py; the ctest label of each one's tests). jp comes in Phase 3B.
+$available = @('usa')
+$planned = @('jp')
+if ($Edition -eq 'all') { $editions = $available }
+elseif ($available -contains $Edition) { $editions = @($Edition) }
+else { throw "Edition '$Edition' is not available yet (Phase 3B)" }
+# Labels left out of the tests: the editions not chosen
+$excluded = @(($available + $planned) | Where-Object { $editions -notcontains $_ })
 
 $vs = $VsPath
 $cmake = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
@@ -49,19 +64,26 @@ if ($TestAll -or $Test -or $TestHist) {
     # e.g. the user playing; a real defect fails both times)
     $targs = @('--test-dir', 'build', '-C', 'Release', '-j', $jobs, '--repeat', 'until-pass:2')
     if ($Verbose) { $targs += '--output-on-failure' }
+    # (-L twice would mean "both labels" and drop the common tests: the other editions are excluded instead)
+    $leftOut = @($excluded)
     if ($TestHist) { $targs += @('-L', 'history') }
-    elseif ($TestAll) { $targs += @('-LE', 'history') }
+    elseif ($TestAll) { $leftOut = @('history') + $leftOut }
     else { $targs += @('-L', 'quick') }
+    if ($leftOut.Count -gt 0) { $targs += @('-LE', "^($($leftOut -join '|'))$") }
     $rc = Run-Filtered $ctest $targs '(?i)tests passed|\*\*\*Failed|\*\*\*Exception|\*\*\*Timeout|Not Run|^\s+\d+ - '
     if ($rc -ne 0) { throw 'Tests failed' }
 }
 if ($Package) {
     if (-not $TestAll) {
         $targs = @('--test-dir', 'build', '-C', 'Release', '-L', 'package', '--repeat', 'until-pass:2')
+        if ($excluded.Count -gt 0) { $targs += @('-LE', "^($($excluded -join '|'))$") }
         if ($Verbose) { $targs += '--output-on-failure' }
         $rc = Run-Filtered $ctest $targs '(?i)tests passed|\*\*\*Failed|\*\*\*Exception|\*\*\*Timeout|Not Run|^\s+\d+ - '
         if ($rc -ne 0) { throw 'Package test failed' }
     }
-    & python tools\package\make_package.py build\Release\YsRecomp.exe dist
-    if ($LASTEXITCODE -ne 0) { throw 'Package assembly failed' }
+    # One package per edition (the executable's name per edition comes in Phase 3B; usa: YsRecomp.exe)
+    foreach ($ed in $editions) {
+        & python tools\package\make_package.py --edition $ed build\Release\YsRecomp.exe dist
+        if ($LASTEXITCODE -ne 0) { throw 'Package assembly failed' }
+    }
 }

@@ -7,13 +7,18 @@
 #        scripts/build.sh --package    -> the player package: not on macOS yet (.app, M3)
 #        --verbose                     -> show everything (full build and test output)
 #        --target NAME                 -> build only that target (repeatable; e.g. --target app_tests)
+#        --edition usa|jp|all          -> edition of the game (default all: every edition whose disc and BIOS were
+#                                         found, today only usa); the other editions' tests are left out (common
+#                                         tests always run). jp: Phase 3B. As build.ps1 -Edition
 # Without --verbose, only build warnings and errors and the test summary are shown. To see a failed test's output:
 #   ctest --test-dir build -C Release -R <name> --output-on-failure
 # Generator: Ninja Multi-Config, so the executables go to build/Release/ as on Windows (tools/build_paths.py).
 # Python: .venv/bin/python when it exists (3.11 or later: CMakeLists.txt checks it), otherwise the one in PATH.
+# Disc and BIOS: -DYS_USA_CUE=... -DYS_USA_BIOS=... at the first configuration (or cmake -S . -B build -D...), otherwise
+# roms/<upstream name>, then roms/usa/ and roms/bios/ (cmake/ys_edition.cmake).
 set -euo pipefail
 
-TEST=""; PACKAGE=0; VERBOSE=0; TARGETS=()
+TEST=""; PACKAGE=0; VERBOSE=0; TARGETS=(); EDITION=all
 while [ $# -gt 0 ]; do
     case "$1" in
         --test) TEST=quick ;;
@@ -22,10 +27,24 @@ while [ $# -gt 0 ]; do
         --package) PACKAGE=1 ;;
         --verbose) VERBOSE=1 ;;
         --target) shift; TARGETS+=("${1:?--target needs a name}") ;;
-        -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+        --edition) shift; EDITION="${1:?--edition needs usa, jp or all}" ;;
+        -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
         *) echo "Unknown option: $1 (--help)" >&2; exit 2 ;;
     esac
     shift
+done
+
+# Editions (tools/editions.py; the ctest label of each one's tests). jp comes in Phase 3B.
+AVAILABLE="usa"; PLANNED="jp"
+case "$EDITION" in
+    all) EDITIONS="$AVAILABLE" ;;
+    usa) EDITIONS="$EDITION" ;;
+    jp) echo "Edition 'jp' is not available yet (Phase 3B)" >&2; exit 2 ;;
+    *) echo "Unknown edition: $EDITION (usa, jp or all)" >&2; exit 2 ;;
+esac
+EXCLUDED=""
+for e in $AVAILABLE $PLANNED; do
+    case " $EDITIONS " in *" $e "*) ;; *) EXCLUDED="${EXCLUDED:+$EXCLUDED|}$e" ;; esac
 done
 
 cd "$(dirname "$0")/.."
@@ -70,11 +89,14 @@ if [ -n "$TEST" ]; then
     # fails both times)
     targs=(--test-dir build -C Release -j "$jobs" --repeat until-pass:2)
     [ "$VERBOSE" = 1 ] && targs+=(--output-on-failure)
+    # (-L twice would mean "both labels" and drop the common tests: the other editions are excluded instead)
+    left_out="$EXCLUDED"
     case "$TEST" in
         history) targs+=(-L history) ;;
-        all) targs+=(-LE history) ;;
+        all) left_out="history${left_out:+|$left_out}" ;;
         *) targs+=(-L quick) ;;
     esac
+    [ -n "$left_out" ] && targs+=(-LE "^($left_out)\$")
     run_filtered "$summary" ctest "${targs[@]}" || { echo "Tests failed" >&2; exit 1; }
 fi
 if [ "$PACKAGE" = 1 ]; then

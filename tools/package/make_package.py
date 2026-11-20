@@ -6,18 +6,25 @@ are created next to the .exe the first time the player runs it). Before building
   - does not need the "Visual C++ Redistributable" (does not import VCRUNTIME140.dll or api-ms-win-crt-*);
   - has the icon (runtime/host/win/ysrecomp.ico) embedded.
 
-Usage: make_package.py YsRecomp.exe OUTPUT_FOLDER
+Usage: make_package.py [--edition usa] YsRecomp.exe OUTPUT_FOLDER
+       (--edition: only usa until Phase 3B; the folder, .exe, .zip and .ini names come from the edition's executable
+       name, tools/editions.py)
 """
+import argparse
 import os
 import shutil
 import sys
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+import editions  # noqa: E402
+
 README = os.path.join(ROOT, "package", "README.txt")
 ICON = os.path.join(ROOT, "runtime", "host", "win", "ysrecomp.ico")
-FILES = ("YsRecomp.exe", "README.txt")
-KEEP = ("YsRecomp.ini", "saves", "sessions", "menu_font.bin", "launcher_sfx.bin")
+EXE = editions.get(editions.DEFAULT).exe  # YsRecomp
+FILES = (f"{EXE}.exe", "README.txt")
+KEEP = (f"{EXE}.ini", "saves", "sessions", "menu_font.bin", "launcher_sfx.bin")
 GAME_DATA = ("menu_font.bin", "launcher_sfx.bin")
 # Start menu images: pixel-art CD cases and the logo, made by the user (nothing from the disc)
 LAUNCHER_IMAGES = ("Ys Logo.jpg", "YS I II.jpg", "Ys III.jpg", "Ys IV.jpg")
@@ -45,13 +52,15 @@ def check_exe(exe):
     return problems
 
 
-def make(exe, out):
+def make(exe, out, edition=editions.DEFAULT):
+    if editions.get(edition).exe != EXE:  # the names below are the USA edition's (Phase 3B: per edition)
+        raise SystemExit(f"make_package: no package for edition {edition} yet")
     problems = check_exe(exe)
     if problems:
         for p in problems:
             print(f"ERROR: {p}")
         return None
-    folder = os.path.join(out, "YsRecomp")
+    folder = os.path.join(out, EXE)
     # What the player created by playing in this folder (configuration, saves, recorded sessions) stays
     os.makedirs(folder, exist_ok=True)
     for name in os.listdir(folder):
@@ -62,7 +71,7 @@ def make(exe, out):
             shutil.rmtree(path)
         else:
             os.remove(path)
-    shutil.copy2(exe, os.path.join(folder, "YsRecomp.exe"))
+    shutil.copy2(exe, os.path.join(folder, f"{EXE}.exe"))
     # README with Windows line endings (old Notepad)
     with open(README, encoding="utf-8") as f:
         text = f.read()
@@ -73,28 +82,30 @@ def make(exe, out):
         os.makedirs(os.path.join(folder, "launcher"))
         for name in images:
             shutil.copy2(os.path.join(ROOT, "docs", name), os.path.join(folder, "launcher", name))
-    zip_path = os.path.join(out, "YsRecomp.zip")
+    zip_path = os.path.join(out, f"{EXE}.zip")
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         for name in FILES:
-            z.write(os.path.join(folder, name), f"YsRecomp/{name}")
+            z.write(os.path.join(folder, name), f"{EXE}/{name}")
         for name in images:
-            z.write(os.path.join(folder, "launcher", name), f"YsRecomp/launcher/{name}")
+            z.write(os.path.join(folder, "launcher", name), f"{EXE}/launcher/{name}")
         # The menu font and the launcher sound effects, made by the program from the disc on its first run here:
         # shipped so the player sees the menu font and hears the launcher right away (without them the program
         # makes them again from the player's disc).
         for name in GAME_DATA:
             if os.path.isfile(os.path.join(folder, name)):
-                z.write(os.path.join(folder, name), f"YsRecomp/{name}")
+                z.write(os.path.join(folder, name), f"{EXE}/{name}")
             else:
                 print(f"Note: {name} is not in {folder} (run the game once from there): not in the zip.")
     return folder, zip_path
 
 
 def main():
-    if len(sys.argv) != 3:
-        print(__doc__)
-        return 2
-    r = make(sys.argv[1], sys.argv[2])
+    ap = argparse.ArgumentParser(description="Builds the player package (see the top of this file).")
+    ap.add_argument("exe")
+    ap.add_argument("out")
+    editions.add_argument(ap)
+    a = ap.parse_args()
+    r = make(a.exe, a.out, a.edition)
     if not r:
         return 1
     folder, zip_path = r

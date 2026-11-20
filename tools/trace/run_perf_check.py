@@ -5,8 +5,9 @@ RAM, CD RAM) with a reference recorded before the optimizations. Also shows fram
     python tools/trace/run_perf_check.py --save REF   records the reference (before changing anything)
     python tools/trace/run_perf_check.py --check REF  checks against it (afterwards)
 
-Options: --exe (default build/Release/ys_trace, .exe on Windows), --cue, --bios <system card> (real BIOS
-instead of the C routines), --frames N (cuts each session at N frames), --only <part of the name>.
+Options: --edition (default usa: its sessions, trace tool and disc), --exe (default the edition's trace tool,
+build/Release/ys_trace, .exe on Windows), --cue (default the edition's disc, tools/editions.py), --bios <system card>
+(real BIOS instead of the C routines), --frames N (cuts each session at N frames), --only <part of the name>.
 Without the disc: exits with 77 (skipped).
 """
 import argparse
@@ -22,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import build_paths  # noqa: E402
+import editions  # noqa: E402
 
 
 def session_frames(path):
@@ -75,12 +77,16 @@ def main():
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument("--save")
     mode.add_argument("--check")
-    ap.add_argument("--exe", default=build_paths.exe("ys_trace"))
-    ap.add_argument("--cue", default=os.path.join(ROOT, "roms", "Ys Book I & II (USA).cue"))
+    ap.add_argument("--exe")
+    ap.add_argument("--cue")
     ap.add_argument("--bios")
     ap.add_argument("--frames", type=int)
     ap.add_argument("--only")
+    editions.add_argument(ap)
     args = ap.parse_args()
+    ed = editions.get(args.edition)
+    args.exe = args.exe or build_paths.exe(ed.trace)
+    args.cue = args.cue or ed.cue()
     if not os.path.exists(args.cue):
         print(f"No disc ({args.cue}): skipped.")
         return 77
@@ -90,7 +96,7 @@ def main():
         return 77
     work = os.path.join(ref, "atual") if args.check else ref
     os.makedirs(work, exist_ok=True)
-    sessions = sorted(glob.glob(os.path.join(ROOT, "games", "ys", "sessions", "*.txt")))
+    sessions = sorted(glob.glob(os.path.join(ed.sessions_dir, "*.txt")))
     if args.only:
         sessions = [s for s in sessions if args.only in s]
     if args.check:

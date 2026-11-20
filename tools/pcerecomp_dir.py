@@ -4,6 +4,10 @@ Order (same as CMakeLists.txt): the PCERECOMP_DIR variable; the working copy nex
 the submodule external/PCERecomp.
 """
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import build_paths  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -20,4 +24,5 @@ def find():
 
 PCERECOMP = find()
 TRACE_TOOLS = os.path.join(PCERECOMP, "tools", "trace")
-GG_TRACE = os.path.join(PCERECOMP, "tools", "reference_trace", "build", "Release", "gg_trace.exe")
+# Geargrafx reference (built by PCERecomp's tools/reference_trace): gg_trace.exe on Windows, gg_trace elsewhere
+GG_TRACE = os.path.join(PCERECOMP, "tools", "reference_trace", "build", "Release", build_paths.exe_name("gg_trace"))

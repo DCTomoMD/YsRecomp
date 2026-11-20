@@ -102,6 +102,7 @@ cd YsRecomp
 # put your files in roms\ (never committed):
 #   roms\Ys Book I & II (USA).cue  (+ its .bin tracks)
 #   roms\[BIOS] TurboGrafx CD System Card (USA) (v2.0).pce
+# (or the disc in roms\usa\ and the BIOS in roms\bios\; anywhere else: the CMake variables YS_USA_CUE, YS_USA_BIOS)
 .\build.ps1            # build (Release, in build\); the first build generates the game's C (~12 min)
 .\build.ps1 -Test      # quick tests (~20 s)
 .\build.ps1 -TestAll   # all tests

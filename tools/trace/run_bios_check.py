@@ -4,9 +4,11 @@ Runs bios_check (see PCERecomp/tools/trace/bios_check.c) on every recorded sessi
 merges the results: per routine, how many calls were checked and how many differed.
 
 Usage: python tools/trace/run_bios_check.py [sessions ...] [--routines E009,E012|all] [--max N]
-                                            [--frames N] [--bios-check <exe>]
-       (no sessions: all of games/ys/sessions/; game, BIOS and save come from each one's header)
-Exit: 0 = all equal, 1 = some difference, 2 = usage error.
+                                            [--frames N] [--bios-check <exe>] [--edition usa]
+                                            [--cue <disc>] [--bios <system card>]
+       (no sessions: all of the edition's sessions, games/ys/sessions/ for usa; game, BIOS and save come from each
+       one's header, resolved on this machine by tools/editions.py; --cue/--bios replace the header's)
+Exit: 0 = all equal, 1 = some difference, 2 = usage error, 77 = disc or BIOS missing (skipped).
 """
 import argparse
 import glob
@@ -19,6 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.dirname(HERE))
 import build_paths  # noqa: E402
+import editions  # noqa: E402
 EXE = build_paths.exe("bios_check")
 
 
@@ -43,9 +46,13 @@ def main():
     ap.add_argument("--max", type=int, default=2000)
     ap.add_argument("--frames", type=int, help="limits the number of frames of each session")
     ap.add_argument("--bios-check", default=EXE)
+    editions.add_argument(ap)
+    ap.add_argument("--cue", help="the disc to use instead of the headers'")
+    ap.add_argument("--bios", help="the System Card to use instead of the headers'")
     a = ap.parse_args()
+    ed = editions.get(a.edition)
 
-    sessions = a.sessions or sorted(glob.glob(os.path.join(ROOT, "games", "ys", "sessions", "*.txt")))
+    sessions = a.sessions or sorted(glob.glob(os.path.join(ed.sessions_dir, "*.txt")))
     if not sessions:
         print("no session found")
         return 2
@@ -63,12 +70,14 @@ def main():
         if not game or not bios or frames <= 0:
             print(f"{s}: header without 'game', 'bios' or 'frames'")
             return 2
-        if not os.path.exists(os.path.join(ROOT, game)) or not os.path.exists(os.path.join(ROOT, bios)):
+        editions.session_edition(info, ed.id)
+        game, bios = editions.header_path(game, ed, a.cue), editions.header_path(bios, ed, a.bios)
+        if not os.path.exists(game) or not os.path.exists(bios):
             print(f"missing {game} or {bios}: test skipped")
             return 77
         cmd = [a.bios_check, "--input", s, "--routines", a.routines, "--max", str(a.max)]
         if info.get("save"):
-            cmd += ["--bram", info["save"]]
+            cmd += ["--bram", editions.normalize(info["save"])]
         cmd += ["--bios", bios, game, str(frames)]
         procs.append((s, subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                           text=True, encoding="utf-8", errors="replace")))

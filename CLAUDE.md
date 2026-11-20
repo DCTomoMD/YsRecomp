@@ -208,11 +208,12 @@ natively on PC (Windows). The generated C mimics the CPU instruction by instruct
 
 ## roms/ の配置
 - ユーザーの配置：roms/usa（北米版）、roms/jp（日本版）、roms/bios（System Card）。読み取り専用、Git 管理外。
-- 上流 CMake は roms/ 直下の固定名を参照する（CMakeLists.txt:24-25）：
-  - `roms/Ys Book I & II (USA).cue`
-  - `roms/[BIOS] TurboGrafx CD System Card (USA) (v2.0).pce`
-- 両者の不一致は M2 で解消する（パスを CMake のキャッシュ変数で指定できるようにする）。
-  それまで roms/ の中身を移動・リンク・改名しない。
+- M2 で、ディスクと BIOS をキャッシュ変数 `YS_USA_CUE`・`YS_USA_BIOS` で指定できるようにした（`cmake/ys_edition.cmake` の
+  `ys_rom_file`）。空のとき（既定）は、上流の場所（`roms/Ys Book I & II (USA).cue`、
+  `roms/[BIOS] TurboGrafx CD System Card (USA) (v2.0).pce`）にあればそれを使い、なければ `roms/usa/` と `roms/bios/` の
+  同じ名前のファイルを使う。どれを使ったかは構成時に `-- YS_USA_CUE: ...`（BIOS は SHA-1 付き）と出る。
+  Python のツールも同じ規則で選ぶ（`tools/editions.py`）。日本版の変数（`YS_JP_CUE`・`YS_JP_BIOS`）は Phase 3B で追加する。
+- roms/ の中身は移動・リンク・改名しない（読み取り専用）。
 
 ## フェーズ順序（macOS 先行）
 1. 調査：Phase 0（完了）と M0（移植性）。どちらも読み取りのみ。
@@ -278,8 +279,15 @@ roms/ 直下に北米版の cue と bin 43 本、System Card (USA) v2.0 を上�
   `build/Release/` に出る（拡張子なし。ツールは `tools/build_paths.py` で名前を決める）。Python は `.venv/bin/python`。
     scripts/build.sh --target pce_app --target app_tests
     ctest --test-dir build -C Release -R '^(app_config|app_volume|host_layers)$'
+- M2 の時点で macOS で確かめたもの：`pce_trace`・`bios_check` のビルド、ROM が必要な `app_disc_id`・`app_cd_menu_music`・
+  `recomp_disc_ys`・`bios_c_ys` の合格（review_portability/09_m2_rom_paths_editions.md）。ROM が見つかると生成 C の
+  ターゲットも定義されるので、M3 までは `--target` で必要なものだけをビルドする（引数なしの `scripts/build.sh` は生成 C の
+  生成と Clang でのコンパイルを始める）。
 - OS の差は `cmake/platform_{windows,macos}.cmake` と `runtime/host/{win,null,common}` に置く。
   層の規則は試験 `host_layers`（`tools/check_layers.py`、quick）が確かめる。
+- 版の差は `cmake/ys_edition.cmake` の `ys_edition()` と `tools/editions.py` に置く。版の試験にはラベル（`usa`）が付く。
+  `build.ps1 -Edition usa|jp|all` / `scripts/build.sh --edition ...`（既定 `all`）は、ほかの版の試験を `-LE` で除く
+  （`-L` を 2 つ並べると AND になり、版のない共通の試験が外れるため）。`jp` は Phase 3B まで「まだない」で終わる。
 
 ### CI（GitHub Actions、Windows x64）
 - `.github/workflows/windows-ci.yml`：試験対象のコミットと基準（`06b62c6`）を同じ runner でビルドし、ROM 不要の試験を

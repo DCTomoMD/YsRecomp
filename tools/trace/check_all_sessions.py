@@ -16,6 +16,9 @@ YsRecomp open, sessions modified less than 3 minutes ago are skipped: the game m
 recording is rewritten every minute).
 
 Usage: python tools/trace/check_all_sessions.py [FOLDER ...] [--force] [--jobs N] (N sessions at the same time)
+                                               [--edition usa] [--cue <disc>] [--bios <system card>]
+       (--edition picks the trace tool, the default folders and the game's executable name; the headers' disc and
+       BIOS are resolved on this machine by tools/editions.py, --cue/--bios replace them)
 Exit: 0 = all equal, 1 = some different or with an error.
 """
 import argparse
@@ -31,15 +34,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.dirname(HERE))
 import build_paths  # noqa: E402
-YS_TRACE = build_paths.exe("ys_trace")
-FOLDERS = (os.path.join(ROOT, "games", "ys", "sessions"), os.path.join(ROOT, "dist", "YsRecomp", "sessions"))
+import editions  # noqa: E402
 WORK = os.path.join(ROOT, "build", "sessions")
 RECENT_S = 180
 
 
-def game_running():
-    """Is YsRecomp open (Windows: tasklist; elsewhere: pgrep)? When it cannot tell, says yes."""
-    name = build_paths.exe_name("YsRecomp")
+def folders(ed):
+    """The edition's sessions and the ones the player's package records (record_sessions=1)."""
+    return (ed.sessions_dir, os.path.join(ROOT, "dist", ed.exe, "sessions"))
+
+
+def game_running(ed):
+    """Is the game open (Windows: tasklist; elsewhere: pgrep)? When it cannot tell, says yes."""
+    name = build_paths.exe_name(ed.exe)
     try:
         if sys.platform == "win32":
             out = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {name}", "/NH"], capture_output=True,
@@ -57,21 +64,22 @@ sys.path.insert(0, HERE)
 from check_session import read_header  # noqa: E402
 
 
-def lockstep(session, info, frames):
+def lockstep(session, info, frames, ed, a):
     """Returns (ok, result text)."""
     name = os.path.splitext(os.path.basename(session))[0]
     work = os.path.join(WORK, name)
     os.makedirs(work, exist_ok=True)
-    # Header paths relative to the project root (sessions recorded with --record games\...)
-    cmd = [YS_TRACE, "--frame", "--lockstep", "--input", os.path.abspath(session)]
+    # Header paths relative to the project root (sessions recorded with --record games\...), resolved on this
+    # machine (tools/editions.py)
+    cmd = [build_paths.exe(ed.trace), "--frame", "--lockstep", "--input", os.path.abspath(session)]
     if info.get("bios", "-") != "-":
-        cmd += ["--bios", os.path.join(ROOT, info["bios"])]
+        cmd += ["--bios", editions.header_path(info["bios"], ed, a.bios)]
     if info.get("save"):
-        save = os.path.join(ROOT, info["save"])
+        save = editions.normalize(info["save"])
         if not os.path.exists(save):  # copy whose header has only the save name: it sits next to the session
             save = os.path.join(os.path.dirname(os.path.abspath(session)), info["save"])
         cmd += ["--bram", save]
-    cmd += [os.path.join(ROOT, info["game"]), str(frames), os.path.join(work, "lockstep.ppm")]
+    cmd += [editions.header_path(info["game"], ed, a.cue), str(frames), os.path.join(work, "lockstep.ppm")]
     t = time.time()
     r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=work)
     out = r.stdout + r.stderr
@@ -90,9 +98,13 @@ def lockstep(session, info, frames):
                   f"({secs:.0f} s); in the interpreter: {n_interp} instructions ({pct:.2f}%){note}")
 
 
-def geargrafx(session):
-    r = subprocess.run([sys.executable, os.path.join(HERE, "check_session.py"), os.path.abspath(session)],
-                       capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
+def geargrafx(session, ed, a):
+    cmd = [sys.executable, os.path.join(HERE, "check_session.py"), os.path.abspath(session), "--edition", ed.id]
+    if a.cue:
+        cmd += ["--cue", a.cue]
+    if a.bios:
+        cmd += ["--bios", a.bios]
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
     lines = (r.stdout + r.stderr).strip().splitlines()
     if r.returncode == 0:
         lines = [l for l in lines if l.startswith("EQUAL")] or lines[-1:]
@@ -104,12 +116,17 @@ def main():
     ap.add_argument("folders", nargs="*")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--jobs", type=int, default=1, help="sessions checked at the same time")
+    editions.add_argument(ap)
+    ap.add_argument("--cue", help="the disc to use instead of the headers'")
+    ap.add_argument("--bios", help="the System Card to use instead of the headers' (sessions with one)")
     a = ap.parse_args()
-    if not os.path.exists(YS_TRACE):
-        print(f"{YS_TRACE} not found: build first (build.ps1)")
+    ed = editions.get(a.edition)
+    trace = build_paths.exe(ed.trace)
+    if not os.path.exists(trace):
+        print(f"{trace} not found: build first (build.ps1)")
         return 1
     sessions, names = [], set()
-    for folder in a.folders or FOLDERS:
+    for folder in a.folders or folders(ed):
         for s in sorted(glob.glob(os.path.join(folder, "session_*.txt"))):
             if os.path.basename(s) not in names:  # the same session copied to games/ys/sessions
                 names.add(os.path.basename(s))
@@ -117,7 +134,7 @@ def main():
     if not sessions:
         print("No session found.")
         return 0
-    running = game_running()
+    running = game_running(ed)
     todo = []
     for s in sessions:
         info = read_header(s)
@@ -126,6 +143,9 @@ def main():
         label = os.path.basename(s)
         if not info.get("game") or frames <= 0:
             print(f"{label}: header without 'game' or 'frames', skipped")
+            continue
+        if info.get("edition", ed.id) != ed.id:
+            print(f"{label}: edition {info['edition']}, not {ed.id}: skipped (--edition {info['edition']})")
             continue
         if running and time.time() - os.path.getmtime(s) < RECENT_S:
             print(f"{label}: recorded less than 3 min ago with YsRecomp open (may still be recording), skipped")
@@ -140,10 +160,10 @@ def main():
 
     def check(item):
         s, info, frames, result_path = item
-        ok, text = lockstep(s, info, frames)
+        ok, text = lockstep(s, info, frames, ed, a)
         lines = [text]
         if ok and info.get("bios", "-") != "-":
-            ok, text = geargrafx(s)
+            ok, text = geargrafx(s, ed, a)
             lines.append(text)
         verdict = "EQUAL" if ok else "DIFFERENT"
         with open(result_path, "w", encoding="utf-8") as f:
