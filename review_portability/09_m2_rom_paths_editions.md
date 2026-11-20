@@ -95,7 +95,8 @@
 
 M1 と同じ実機・同じ手順（`07a` の 3.2：ctest を直接実行、`Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`）。
 ROM と BIOS は今までどおり `roms\` 直下に上流の名前で置いたまま（M2 の既定値はこの場所を最初に見る）。before は `18e1eaf`、
-after は `c65b3ad`（M2 の `6381c28` に、M2-6・M2-5・M1-6 の直しと、PCERecomp をフォークにした変更を足したもの）。
+after は `4d575ff`（M2 の `6381c28` に、M2-6・M2-5・M1-6 の直し、PCERecomp をフォークにした変更、M3-1 の `VERBATIM` を足したもの）。
+`git pull` で取るブランチの先頭は、この手順を直した文書だけのコミットになるが、ビルドに効く中身は `4d575ff` と同じ。
 runtime の C は変えていないので、C8（アイコン）と C9（GPU）は不要。
 
 `c65b3ad` からサブモジュールの URL がフォーク（`DCTomoMD/PCERecomp`、`2e86f2c`）に変わった。after に切り替えたら
@@ -118,12 +119,12 @@ python tools\trace\run_bios_check.py games\ys\sessions\session_20261017_161116.t
 
 期待：`18e1eaf`、`host_layers` が出る、`Total Tests: 99`。`-L usa` は `Total Tests: 0`（ラベルがまだない）。
 
-### 6.2 after（`c65b3ad`）
+### 6.2 after（`4d575ff`）
 
 ```powershell
 git checkout feature/japanese-disc-support; git pull
 git submodule sync; git submodule update
-git log --oneline -1                                   # -> c65b3ad
+git log --oneline -3                                   # -> 4d575ff を含む（先頭は文書だけのコミット）
 git -C external/PCERecomp log --oneline -1             # -> 2e86f2c
 Remove-Item -Recurse -Force build
 .\build.ps1
@@ -139,6 +140,7 @@ python tools\trace\run_bios_check.py games\ys\sessions\session_20261017_161116.t
 .\build.ps1 -Edition jp *> after_edition_jp.txt
 python tools\trace\check_all_sessions.py --help *> after_tools.txt
 python tools\trace\run_bios_check.py --edition jp *>> after_tools.txt
+python -c "import hashlib,glob,os;h=hashlib.sha256();[h.update(os.path.basename(f).encode()+b'\0'+open(f,'rb').read().replace(b'\r\n',b'\n')) for f in sorted(glob.glob('games/ys/generated/c/*.c'))];print(h.hexdigest()[:16])" *> after_gen_hash.txt
 ```
 
 ### 6.3 チェックポイント
@@ -153,6 +155,8 @@ python tools\trace\run_bios_check.py --edition jp *>> after_tools.txt
 | W6 | `-Edition jp` | `Edition 'jp' is not available yet (Phase 3B)` で止まる |
 | W7 | ツール | `before_bios.txt` と `after_bios.txt` の表と `RESULT` 行が同じ（macOS では `cd_read $E009 7 7 0 0`、`RESULT: all equal in every session`）。`check_all_sessions.py --help` に `--edition`・`--cue`・`--bios` がある。`run_bios_check.py --edition jp` は `not available yet` |
 | W8 | M1-6 の直し | `Select-String "recomp_lockstep_ys" after_testall.txt` で `recomp_lockstep_ys` の `Passed` の行が 1 つだけ（1 回目で合格）。`build\recomp_ys` が構成の直後からある |
+| W9 | M3-1 の `VERBATIM` | `.\build.ps1`（`build` を消した後なので生成 C の作り直しから）が通る。`(Get-ChildItem games\ys\generated\c\*.c).Count` が 25 |
+| W10 | 生成 C が macOS と同じ | `after_gen_hash.txt` が `9f8978190fba1dde`（改行を LF にそろえた SHA-256 の先頭 16 桁。10 の 8 章） |
 
 - `recomp_lockstep_ys` が 1 回目に失敗し 2 回目に合格するのは M1-6（M2 の前から）。before では判定に使わない。after
   （M1-6 の直しを含むコミット）では新しいビルドの全試験で 1 回目から合格するはずなので、`after_testall.txt` に
@@ -171,15 +175,15 @@ Select-String -Path before_*.txt, after_*.txt -Pattern "tests passed|\*\*\*Faile
 CLAUDE.md（上流の本文と作業規則 v2）を読んでください。次に review_portability/09_m2_rom_paths_editions.md を読んでください。
 
 M2 の Windows での確認を、07a の 3 章と同じ Windows 11 x64 の実機で、09 の 6 章の手順で行いました（before は 18e1eaf、
-after は c65b3ad。サブモジュールはフォークの 2e86f2c）。
+after は 4d575ff。サブモジュールはフォークの 2e86f2c）。
 
-結果（m2_results.txt の中身、Compare-Object の出力、W1 の構成の表示、W8 の Select-String の出力）：
+結果（m2_results.txt の中身、Compare-Object の出力、W1 の構成の表示、W8 の Select-String の出力、after_gen_hash.txt の中身）：
 （ここに貼る）
 
 お願い：
-- W1〜W8 のチェックポイントごとに、合格・不合格・判断できない を表にしてください。before と after の両方で失敗した
+- W1〜W10 のチェックポイントごとに、合格・不合格・判断できない を表にしてください。before と after の両方で失敗した
   試験は実機の環境が原因として分けてください。
-- M2 が原因と考えられる違いがあれば、原因を調べ、修正案を出してください。修正は承認を得てから行い、M3 には進まないでください。
+- M2 が原因と考えられる違いがあれば、原因を調べ、修正案を出してください。修正は承認を得てから行い、M3-2 以降には進まないでください。
 - 結果を review_portability/09_m2_rom_paths_editions.md に記録し（5 章の M2-1・M2-2 の状態も更新）、コミットのコマンドを
   示して止まってください。
 - roms/ は読み取り専用です。サブモジュール external/PCERecomp（フォーク DCTomoMD/PCERecomp）に変更が必要になったら、
