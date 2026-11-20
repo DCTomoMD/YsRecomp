@@ -93,6 +93,8 @@ M3 は、北米版のゲーム本体（生成 C、`ys_trace`、`YsRecomp`）を 
 
 ## 6. 始める前に決めていただくこと
 
+**2026-11-20：ユーザーの回答は「全部推奨で」。Q1〜Q8 はすべて「案（推奨）」の列のとおりに決定**（Q2：ダウンロードを承認。Windows の実機には `reference/` がサブモジュールにも横のフォルダにもないことを確認：`Test-Path ..\PCERecomp\reference` → False）。
+
 | ID | 質問 | 案（推奨） |
 |---|---|---|
 | Q1 | M2 の Windows での確認（W1〜W8）が終わる前に、M3 を始めてよいか | **M3-1（生成 C の測定）だけは先に始める**。macOS だけの作業で、Windows に影響しない。M3-4 以降は、M2 の確認の後にする |
@@ -126,3 +128,33 @@ M3 は、北米版のゲーム本体（生成 C、`ys_trace`、`YsRecomp`）を 
 M3 の後に残るもの：
 - R11・R12・M1-3（vblank と GPU 時間の macOS 実装。任意）
 - macOS の `-Wswitch` と SDL の非推奨 API の警告のうち、E1 で抑えずに直すと決めたもの（直すかどうかは M3-3 で提案する）
+
+---
+
+## 8. M3-1 の結果（2026-11-20、macOS arm64、Apple clang 21.0.0）
+
+| 測ったもの | 時間 | 最大メモリ | 結果 |
+|---|---|---|---|
+| 生成 C の生成（`recomp.py generate`） | 51 秒 | 347 MB | 25 本、86 MB（LF）。16,567 関数、220,294 命令。生成器自身の注意 `1419 targets with unknown bank` は Windows と同じ形の情報 |
+| `rc_part15.c`（いちばん大きい部分、7.2 MB）を単独でコンパイル（`-O3 -ffp-contract=off`） | 2 分 11 秒 | 2.6 GB | 警告 0 |
+| `ys_recomp` 全体（生成 ＋ 25 本のコンパイル。同時 4 本） | 4 分 27 秒（CPU 10 分 31 秒） | 2.7 GB（最大の 1 プロセス） | 成功、コンパイラの警告 0。`libys_recomp.a` 92.7 MB |
+
+見つかった不具合と直し：
+- **`add_custom_command` に `VERBATIM` がない**：
+  - 症状：BIOS とディスクの名前の `(USA) (v2.0)` の括弧と `&` が、macOS のシェルで構文として読まれ、生成が `syntax error near unexpected token '('` で失敗した [C]。
+  - 直し：`cmake/ys_edition.cmake` の 2 つ（生成 C、装備のフレーム）に `VERBATIM` を付けた。Ninja に渡るコマンドで、パスが引用符で囲まれることを確かめた [C]。
+  - 確かめたこと：試験の定義は前と同じ（行番号の情報を除いて差 0）[C]。
+  - Windows：今も動いていて、`VERBATIM` は各シェルに合った引用にするだけなので、振る舞いは変わらない見込み [A]。**Windows での確認が必要**（生成のやり直しを含むビルド）。
+
+`platform_macos.cmake` に入れたもの：
+- 生成 C の同時のコンパイルを 4 本までにする job pool（`generated_c=4`）。Windows の `platform_windows.cmake` は変えていない。
+- 警告を抑えるフラグは足していない（コンパイラの警告が出なかったため）。
+
+R25（改行）：
+- macOS の生成 C は LF [C]。
+- 25 本の中身の SHA-256（ファイル名順に、`名前 + NUL + 中身`。CRLF を LF にそろえて計算）の先頭 16 桁は `9f8978190fba1dde`。
+- Windows でも同じ計算をして一致すれば、生成器は OS によらず同じ C を出している [U → Windows で確認]。
+
+```powershell
+python -c "import hashlib,glob,os;h=hashlib.sha256();[h.update(os.path.basename(f).encode()+b'\0'+open(f,'rb').read().replace(b'\r\n',b'\n')) for f in sorted(glob.glob('games/ys/generated/c/*.c'))];print(h.hexdigest()[:16])"
+```

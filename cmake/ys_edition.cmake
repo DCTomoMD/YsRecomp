@@ -159,7 +159,8 @@ function(ys_edition)
             COMMAND ${PYTHON_EXE} "${PCERECOMP_DIR}/tools/recomp/recomp.py" generate "${SYSCARD2}"
                     --map "${YS_GAME_DIR}/disc.toml" --cd "${YS_CUE}" --out "${YS_GEN_DIR}"
             DEPENDS "${YS_GAME_DIR}/disc.toml" ${RECOMP_SOURCES} "${PCERECOMP_DIR}/tools/recomp/recomp.py"
-            COMMENT "Generating the recompiled Ys C (all of the disc's code)")
+            COMMENT "Generating the recompiled Ys C (all of the disc's code)"
+            VERBATIM)  # the disc and BIOS names have spaces, parentheses and '&' (the macOS shell would read them)
         add_library(ys_recomp STATIC ${YS_GEN_FILES})
         target_link_libraries(ys_recomp PUBLIC pce_core)
         # No LTCG for the generated C (~40 MB): with it, every link of ys_trace/YsRecomp recompiled the whole game (~10 min
@@ -178,7 +179,8 @@ function(ys_edition)
             DEPENDS "${CMAKE_SOURCE_DIR}/tools/equip/equip_frames.py" "${CMAKE_SOURCE_DIR}/tools/equip/equip_preview.py"
                     "${CMAKE_SOURCE_DIR}/tools/equip/equip_ice_preview.py" "${YS_GAME_DIR}/sessions/session_20261023_000904.txt"
                     "${YS_GAME_DIR}/sessions/session_20261017_153505.txt"
-            COMMENT "Extracting Adol's frames from the disc (equipment)")
+            COMMENT "Extracting Adol's frames from the disc (equipment)"
+            VERBATIM)
         add_library(equip_frames STATIC "${EQUIP_FRAMES_C}")
         target_include_directories(equip_frames PRIVATE runtime)
         add_dependencies(equip_frames pce_trace)

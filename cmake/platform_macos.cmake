@@ -17,8 +17,11 @@ set(PLATFORM_HOST_SOURCES
     runtime/host/null/gpu_timing_null.c)
 set(PLATFORM_HOST_LIBRARIES)
 
-# Generated C: flags come in M3
+# Generated C: at most 4 files compiled at the same time (M3-1: the largest part takes ~2.6 GB and ~2 min with
+# Apple Clang -O3; 4 at a time fits in 24 GB with room for the rest of the build). No warning flags: none came out.
+set_property(GLOBAL APPEND PROPERTY JOB_POOLS generated_c=4)
 function(platform_generated_code target)
+    set_property(TARGET ${target} PROPERTY JOB_POOL_COMPILE generated_c)
 endfunction()
 
 # The player's executable: .app bundle, Info.plist and icon come in M3
