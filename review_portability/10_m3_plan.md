@@ -96,7 +96,7 @@ M3 は、北米版のゲーム本体（生成 C、`ys_trace`、`YsRecomp`）を 
 | ID | 質問 | 案（推奨） |
 |---|---|---|
 | Q1 | M2 の Windows での確認（W1〜W8）が終わる前に、M3 を始めてよいか | **M3-1（生成 C の測定）だけは先に始める**。macOS だけの作業で、Windows に影響しない。M3-4 以降は、M2 の確認の後にする |
-| Q2 | `reference/`（Geargrafx、HuC6280 の試験、Mednafen 1.32.1 の 3 ファイル）をこの Mac に入れるダウンロードを承認するか（D5 の実施。作業規則 v2 では SDL3 以外の取得は承認が必要） | **承認する**。ただし Geargrafx は、Windows の実機と**同じコミット**に固定する（`git -C external\PCERecomp\reference\Geargrafx rev-parse HEAD` の値を Windows で調べて教えてください）。HuC6280 の試験も同じ |
+| Q2 | `reference/`（Geargrafx、HuC6280 の試験、Mednafen 1.32.1 の 3 ファイル）をこの Mac に入れるダウンロードを承認するか（D5 の実施。作業規則 v2 では SDL3 以外の取得は承認が必要） | **承認する**。2026-11-20 の確認で、**Windows の実機にも `reference/` はない**（`git -C external\PCERecomp\reference\Geargrafx rev-parse HEAD` が「No such file or directory」。07a の skip 6 本と `cpu_huc6280` の失敗と合う）。そのため Geargrafx はダウンロードの時点の最新のリリースのタグに固定し、コミットを記録して、M3-8 で Windows にも同じコミットを入れる。HuC6280 の試験も、取ったコミットを記録して両方で同じものを使う |
 | Q3 | `SDL_GetPrefPath` の組織名 `<org>`（H2） | **空文字**：`~/Library/Application Support/YsRecomp/` になる |
 | Q4 | macOS の全画面のショートカット（H3） | **Cmd+Ctrl+F を足す**（Alt+Enter も残す） |
 | Q5 | 最低の macOS の版（H5、D9） | **macOS 13**。SDL3 3.2.30 の要件と、Apple Clang の既定を確かめてから最終の値を提案する |
