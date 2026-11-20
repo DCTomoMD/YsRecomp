@@ -205,6 +205,9 @@ natively on PC (Windows). The generated C mimics the CPU instruction by instruct
 - PCERecomp の変更が必要になった場合は、変更せずに停止して報告する。
   運用方法（上流へ提案する／自分のフォークに切り替える／パッチとして管理する）はユーザーが決める。
 - 承認された後も、PCERecomp に Ys 固有のコードを入れない（上流の規則）。
+- 運用：ユーザーのフォーク `DCTomoMD/PCERecomp` を使う（`.gitmodules` の `url`）。上流 `Fabiano-Gelain/PCERecomp` は
+  サブモジュールの remote `upstream`。最初の変更は、`pce_trace` が画像を書けないときに `could not write the image <パス>`
+  を出すもの（ブランチ `trace-image-write-message`。M1-6 の調査で、終了コード 1 だけで理由が出ないことが分かったため）。
 
 ## roms/ の配置
 - ユーザーの配置：roms/usa（北米版）、roms/jp（日本版）、roms/bios（System Card）。読み取り専用、Git 管理外。
