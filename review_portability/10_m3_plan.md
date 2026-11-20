@@ -339,3 +339,102 @@ Select-String -Path after_m34_paths.txt -Pattern "paths:|all good|FAILED"
 | Y1 | `host_paths` が合格し、`paths: user data` が実行ファイルのフォルダ（`...\build\Release\`）。試験の数は after で 100 本（`Compare-Object` の差は `host_paths` の 1 本だけ） |
 | Y2 | `-Package` の後、`dist\YsRecomp\YsRecomp.exe` を引数なしで起動すると、ini と `saves\` が今までどおり `dist\YsRecomp\` に書かれる |
 | Y3 | Alt+Enter で全画面と窓を行き来でき、オプションメニューの表示と ini の `fullscreen` が合う（M3-4 の前と同じ） |
+
+## 12. M3-5 の結果（2026-11-21、macOS arm64）
+
+### 12.1 直したこと（macOS だけ。Windows のファイルとビルドは変えていない）
+
+| ファイル | 変更 |
+|---|---|
+| `cmake/platform_macos.cmake` | **最低の macOS の版（H5、Q5）**：`CMAKE_OSX_DEPLOYMENT_TARGET` が空なら `13.0`。今までは空で、Apple Clang はビルドした Mac の版（macOS 27）を最低にしていた（`-mmacosx-version-min` がなかった [C]）ので、ほかの Mac では開けなかった。SDL3 3.2.30 は 10.13 まで動く（`docs/README-macos.md`）。<br>**`platform_app_executable`**：`MACOSX_BUNDLE`（`YsRecomp.app/Contents/MacOS/YsRecomp`。試験は `$<TARGET_FILE>` でこれを動かすので、そのまま）、`Info.plist`、アイコン、ランチャーの画像を `Contents/Resources/launcher/` に入れる、ビルドの後に bundle 全体を ad-hoc 署名（`codesign --force --sign - --timestamp=none`、D12）。`CFBundleIdentifier` はキャッシュ変数 `YS_MACOS_BUNDLE_ID`（既定 `local.ysrecomp.YsRecomp`） |
+| `runtime/host/mac/Info.plist.in`（新規） | 名前 `YsRecomp`、版 `1.0.0`（Windows の `.rc` と同じ）、`LSMinimumSystemVersion` は `CMAKE_OSX_DEPLOYMENT_TARGET`、`NSHighResolutionCapable`、カテゴリーはゲーム |
+| `tools/package/make_icon.py` | `--iconset FOLDER`：`.ico` と同じ絵（ディスク由来のものは使わない）で、macOS の `.iconset` の PNG 10 枚（16〜1024。32 までは顔だけ、64 からは全身、整数倍）を書く。このときは `.ico` に触らない。`iconutil -c icns` で `.icns` にする（Q7）。`.icns` はビルドのフォルダに作り、Git には入れない |
+
+- `.ico` について：引数なしで `make_icon.py` を macOS で動かすと、`.ico` のバイトが Windows で作ったものと違う（大きさは同じ）。PNG の画素と PNG 以外の部分は同じで、違うのは zlib の圧縮だけ [C]。M3-5 の作業中に誤って一度書き直したので、Git の中身に戻した（`git checkout -- runtime/host/win/ysrecomp.ico`、SHA-1 `5ea00552…` を確認）。
+
+### 12.2 macOS で確かめたこと
+
+| 実行したこと | 結果 |
+|---|---|
+| `scripts/build.sh`（全ターゲット。最低の版を変えたので生成 C から全部） | 成功。コンパイルのフラグに `-mmacosx-version-min=13.0` [C]。警告 24 件：SDL3 のソースの非推奨 API 22 件（`-Wdeprecated-declarations`。最低の版を 13 にしたので出る。M1 でも見えていたもの）と、`pce_trace.c:456` の `-Wformat` 2 件（PCERecomp。`pce_trace` と `ys_trace` の 2 回）。**自分たちのコードの警告は 0** |
+| `.app` の中身 | `Contents/MacOS/YsRecomp`、`Contents/Info.plist`、`Contents/Resources/YsRecomp.icns`、`Contents/Resources/launcher/`（4 枚）、`Contents/_CodeSignature/` [C] |
+| `codesign -v --strict` | `valid on disk`、`satisfies its Designated Requirement` [C] |
+| `vtool -show-build` | `platform MACOS`、`minos 13.0` [C] |
+| `plutil -p Info.plist` | 上の表の値 [C] |
+| R23：`.app` を別の場所にコピーし、`sandbox-exec` で `docs/` を読めなくしてランチャーを動かした | `.app` の画像で 4 枚とも読めた（`missing image` 0 件）。比べるため `.app` の画像を外すと 4 件とも `missing image`。つまり `.app` は `PCE_DOCS_DIR`（ソースの絶対パス）に頼らない [C]。`SDL_GetBasePath()` が `.app` の中では `Contents/Resources/` を返すことも、これで確かめた [C] |
+| 古い作り方の `build/Release/YsRecomp`（`.app` でない実行ファイル） | ビルドのフォルダに残っていたので消した（ビルドの出力だけ） |
+
+- `PCE_DOCS_DIR` は今もコンパイルに入っている（`docs/` の絶対パスの文字列がバイナリに残る）。`.app` の中に画像があるときは使われない。Windows も同じ。取り除くかは M3-6（パッケージ）で決める。
+
+### 12.3 決めていただくこと
+
+| ID | 質問 | 案（推奨を先に） |
+|---|---|---|
+| Q12 | SDL3 のソースの非推奨 API の警告 22 件（E1） | **SDL3 のターゲットだけ `-Wno-deprecated-declarations` で抑える**（外部のライブラリで、直せない。理由をコメントに書く。自分たちのコードの警告は抑えない）。別案：抑えずに、E1 の例外として文書に書く |
+| Q13 | `pce_trace.c:456` の `-Wformat`（PCERecomp） | **フォーク `DCTomoMD/PCERecomp` に直しのブランチを作る**（`long` の `g_watch_vram` を `%04X` に渡しているので、`(unsigned)` を付ける 1 か所。表示は変わらない。上流へ出すかは後で）。作業規則 v2 により、PCERecomp を変える前に承認が必要 |
+| Q14 | `CFBundleIdentifier` | **`local.ysrecomp.YsRecomp` のまま**（実在しないドメインの形。個人の名前を入れない）。別案：ご自身の逆ドメイン名を指定する |
+
+**2026-11-21：ユーザーの回答は「全部推奨で」。** Q12〜Q14 は推奨の案に決定。
+
+### 12.3.1 Q12・Q13 の直しと、その後の結果
+
+| ファイル | 変更 |
+|---|---|
+| `CMakeLists.txt` | SDL3 を取り込んだ直後に `platform_sdl(SDL3-static)` を呼ぶ（各 `platform_*.cmake` が定義する関数。冒頭のコメントにも足した） |
+| `cmake/platform_macos.cmake` | `platform_sdl`：SDL3 のターゲットだけに `-Wno-deprecated-declarations`（理由をコメントに書いた） |
+| `cmake/platform_windows.cmake` | `platform_sdl`：何もしない（Windows は今と同じ） |
+| `external/PCERecomp/tools/trace/pce_trace.c`（フォーク） | 456 行目：`g_watch_vram`（`long`）を `(unsigned)g_watch_vram` にして `%04X` に渡す。表示は変わらない。Ys 固有のものは入れていない |
+
+| 実行したこと | 結果 |
+|---|---|
+| `scripts/build.sh` | SDL3 と `pce_trace.c` を作り直した（オブジェクトが新しくなったことを確かめた）。**ビルドの警告 0 件**（E1 の macOS 側）。`codesign -v --strict` は有効のまま [C] |
+| quick（22 本） | 21 本合格、失敗は `cpu_huc6280` だけ（R21）[C] |
+
+### 12.3.2 history 以外の全試験（Q12・Q13 の前、最低の版 13.0 の後）
+
+- 100 本が定義され（`host_paths` を含む）、history 以外は 90 本。**合格 80 本、失敗 3 本、skip 7 本**（19 分 11 秒）[C]。
+  - skip 7 本：M3-4 と同じ（`reference/` がない、M3-7）。
+  - `cpu_huc6280`（R21、M3-7）、`app_package_ys`（M3-6）：M3-4 と同じ。
+  - **`app_prep_ys`：新しい失敗（M3-5-1）**。
+
+### 12.3.3 `app_prep_ys` の不安定な失敗（M3-5-1、未解決）
+
+- この試験は、新しいフレームの用意を「専用のスレッド」と「窓」の 2 通りで実行し、600 フレーム目からの用意したフレームが
+  全部同じであることを確かめる（実時間の試験、`RUN_SERIAL`）。
+- 結果：
+  - 全試験の中で失敗：`3845 on its own thread, 3842 on the window; ... 3244 in both, 0 different; only in one: [2277, 2278]`。
+  - 単独で 3 回：合格、合格、失敗（`only in one: [2947]`）[C]。
+  - M3-3 と M3-4 では、それぞれ 1 回ずつ合格していた [C]。
+- わかっていること：
+  - 両方で用意したフレームの中身は、毎回すべて同じ（`0 different`）。
+  - 失敗は、窓の側が数枚を用意しなかったこと（片方にしかないフレーム）で、その番号は毎回違う。時間の揺れで決まる [C]。
+  - macOS では、画面の更新の時刻が取れない（`host: display refresh timing not available on this platform`、R11：null の host）
+    ので、窓は自分の見積もりで動く。窓が 1 枚とばすことと関係があるかもしれない [A]。
+  - 最低の版を 13.0 にしたことと関係があるかは、わからない [U]。
+  - Windows では、`--repeat until-pass:2` と `build.ps1` のやり直しで実行しているので、まれな失敗が隠れている可能性もある [U]。
+- 期待値は緩めていない。skip も足していない。原因の調べは承認待ち（12.5 の Q15）。
+
+### 12.4 ユーザーに手で確かめていただくこと（見える窓。試験の窓は隠してあるのでできない）
+
+1. Finder で `build/Release/YsRecomp.app` を開く（ダブルクリック）。自分のビルドなので Gatekeeper の警告は出ない見込み [A]。
+2. Dock とアプリの切り替え（Cmd+Tab）に Adol のアイコンが出る。
+3. 初回はディスクのフォルダを聞かれるので `roms/usa` を選ぶ。ランチャー（表紙 4 枚）が出る。
+4. Cmd+Ctrl+F（または緑のボタン）で全画面になり、もう一度押すと窓に戻る。そのあと Esc → オプションメニュー → Video の「全画面」の表示が、そのときの状態と合う（H3）。
+5. 終了後、`~/Library/Application Support/YsRecomp/YsRecomp.ini` があり、`fullscreen=` が最後の状態になっている。`build/Release/` には ini も `saves/` もできていない。
+
+結果（どの番号が期待どおりで、どれが違ったか）を教えてください。
+
+### 12.4.1 Windows で確かめること（10.6・11.4 と一緒に）
+
+Windows で変わったのは、`CMakeLists.txt` の `platform_sdl(SDL3-static)` の呼び出しと、`platform_windows.cmake` の空の
+`platform_sdl` だけ（`make_icon.py` は `--iconset` のときだけ動きが違う）。
+
+| ID | 確かめること |
+|---|---|
+| Z1 | `.\build.ps1` が通り、新しい警告がない。`git status` で `runtime/host/win/ysrecomp.ico` が変わっていない |
+
+### 12.5 決めていただくこと（M3-5 の後）
+
+| ID | 質問 | 案（推奨を先に） |
+|---|---|---|
+| Q15 | `app_prep_ys` の不安定な失敗（12.3.3） | **M3-6 の前に原因を調べる**：① macOS で単独で 10 回動かして失敗の割合を出す、② 最低の版を戻したビルドでも同じように落ちるかを確かめる、③ `run_prep_test.py` と `main.c` の「窓が用意する」道筋を読み、窓がフレームをとばす条件を特定する。直し方の案を出して止まる（試験の期待値は変えない）。<br>別案：M3-8（R11 の null の host を含むまとめ）まで記録だけにする |

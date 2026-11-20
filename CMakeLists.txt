@@ -12,8 +12,8 @@ if(NOT YS_MULTI_CONFIG AND NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Operating system: compiler flags, host layer sources (runtime/host), generated-code flags and the executable's
-# resources. Each file defines PLATFORM_HOST_SOURCES, PLATFORM_HOST_LIBRARIES, platform_generated_code(target) and
-# platform_app_executable(target). Edition (USA / JP) differences never go there.
+# resources. Each file defines PLATFORM_HOST_SOURCES, PLATFORM_HOST_LIBRARIES, platform_generated_code(target),
+# platform_app_executable(target) and platform_sdl(target). Edition (USA / JP) differences never go there.
 if(WIN32)
     include(cmake/platform_windows.cmake)
 elseif(APPLE)
@@ -61,6 +61,7 @@ FetchContent_Declare(SDL3
     URL_HASH SHA256=4c3b09330d866dc52eb65b66259a6684ad387252ca8c57901b3a2b534eb42e3d
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
 FetchContent_MakeAvailable(SDL3)
+platform_sdl(SDL3-static)
 
 # Cross-file optimization (LTCG) in Release, for our targets (SDL, created above, is left out):
 # the hardware clock calls small functions from several files on every instruction.

@@ -32,6 +32,10 @@ function(platform_generated_code target)
     endif()
 endfunction()
 
+# SDL3 (built from its sources): nothing to add on Windows
+function(platform_sdl target)
+endfunction()
+
 # The player's executable: icon and version information
 function(platform_app_executable target)
     target_sources(${target} PRIVATE runtime/host/win/ysrecomp.rc)

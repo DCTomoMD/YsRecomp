@@ -5,9 +5,10 @@ pixel by pixel from the color at the center of each cell, with similar colors me
 Sizes (integer scaling, sharp pixels): 256 (sprite 14x), 48 (2x) and 24 (1x) with the whole body; 32
 (2x) and 16 (1x) with only the face (the whole body is unreadable that small). The 256 one as PNG, the others as
 BMP, as Windows expects. Output: runtime/host/win/ysrecomp.ico. With --preview FILE.png also writes a preview of each
-size, side by side.
+size, side by side. With --iconset FOLDER, writes instead the PNGs of a macOS .iconset (16 to 1024; the build turns them
+into the .icns with iconutil) and leaves the .ico alone.
 
-Usage: python tools/package/make_icon.py [--preview preview.png]
+Usage: python tools/package/make_icon.py [--preview preview.png] | --iconset FOLDER.iconset
 """
 import os
 import struct
@@ -112,7 +113,28 @@ def ico():
     return out + b"".join(data for _, data in images)
 
 
+# macOS (.icns through iconutil): (file in the .iconset folder, size, art, scale); the same art and the same rule as
+# the Windows sizes (only the face up to 32, the whole body from 64; integer scaling, sharp pixels)
+ICONSET = [("icon_16x16.png", 16, FACE, 1), ("icon_16x16@2x.png", 32, FACE, 2),
+           ("icon_32x32.png", 32, FACE, 2), ("icon_32x32@2x.png", 64, ART, 3),
+           ("icon_128x128.png", 128, ART, 7), ("icon_128x128@2x.png", 256, ART, 14),
+           ("icon_256x256.png", 256, ART, 14), ("icon_256x256@2x.png", 512, ART, 28),
+           ("icon_512x512.png", 512, ART, 28), ("icon_512x512@2x.png", 1024, ART, 56)]
+
+
+def iconset(folder):
+    """Writes the PNGs of a macOS .iconset folder (iconutil -c icns makes the .icns from it)."""
+    os.makedirs(folder, exist_ok=True)
+    for name, size, art, scale in ICONSET:
+        with open(os.path.join(folder, name), "wb") as f:
+            f.write(png(pixels(art, scale, size)))
+    print(f"Wrote {len(ICONSET)} images in {folder}")
+
+
 def main():
+    if "--iconset" in sys.argv:  # macOS build (cmake/platform_macos.cmake); the Windows .ico is not touched
+        iconset(sys.argv[sys.argv.index("--iconset") + 1])
+        return
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     path = os.path.join(root, "runtime", "host", "win", "ysrecomp.ico")
     with open(path, "wb") as f:
