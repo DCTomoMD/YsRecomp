@@ -1,6 +1,6 @@
 # YsRecomp
 
-**Ys Book I & II (TurboGrafx-CD, 1989) running natively on Windows**, with a modern display, smooth motion above 60
+**Ys Book I & II (TurboGrafx-CD, 1989) running natively on Windows and macOS (Apple silicon)**, with a modern display, smooth motion above 60
 FPS, a start menu, an options menu in the game's own style and a few quality-of-life extras. Point it at your own
 bin/cue copy of the game and play: **no emulator and no System Card BIOS file needed.**
 
@@ -75,6 +75,12 @@ Geargrafx emulator. The PC-side extras are drawn on top of the game without chan
    different version, a message says what is wrong.
 4. In the launcher, press Run (Enter) to start and Select (Space) for options.
 
+**macOS** (Apple silicon, macOS 13 or later): there is no macOS download on the Releases page; build the package
+yourself (see [Building from source](#building-from-source)) and unzip `dist/YsRecomp.zip`. The app is not signed by
+a registered Apple developer, so open it the first time with Control-click (or right-click) > Open, or with
+System Settings > Privacy & Security > Open Anyway. Settings, saves and sessions are kept in
+`~/Library/Application Support/YsRecomp/` instead of next to the program.
+
 | | Keyboard | Controller |
 |---|---|---|
 | D-pad | Arrow keys | D-pad |
@@ -83,9 +89,10 @@ Geargrafx emulator. The PC-side extras are drawn on top of the game without chan
 | Select | Space | Y |
 | Run | Enter | X |
 | Options menu | Esc | Menu |
-| Fullscreen | Alt+Enter | |
+| Fullscreen | Alt+Enter (macOS: Cmd+Ctrl+F or Option+Return) | |
 
-More in the player's readme ([package/README.txt](package/README.txt)), which ships in the zip.
+More in the player's readme ([package/README.txt](package/README.txt); on macOS
+[package/README-macOS.txt](package/README-macOS.txt)), which ships in the zip.
 
 ## Building from source
 
@@ -107,6 +114,21 @@ cd YsRecomp
 .\build.ps1 -Test      # quick tests (~20 s)
 .\build.ps1 -TestAll   # all tests
 .\build.ps1 -Package   # player package in dist\YsRecomp\ and dist\YsRecomp.zip
+```
+
+On macOS: Apple silicon, Xcode Command Line Tools (Apple Clang), `cmake` and `ninja` (for example from Homebrew),
+and Python 3.11 or later in a `.venv` folder in the project. `scripts/build.sh` takes the same steps and options as
+`build.ps1`; the executables also go to `build/Release/` (the player is `build/Release/YsRecomp.app`).
+
+```bash
+git clone --recursive <this repository>
+cd YsRecomp
+python3 -m venv .venv
+# put your files in roms/usa/ and roms/bios/ (as above)
+scripts/build.sh              # build; the first build generates and compiles the game's C (~5 min on an 8-core Mac)
+scripts/build.sh --test       # quick tests
+scripts/build.sh --test-all   # all tests except the long "history" group
+scripts/build.sh --package    # player package in dist/YsRecomp/ (YsRecomp.app + README.txt) and dist/YsRecomp.zip
 ```
 
 PCERecomp is found in `external/PCERecomp` (the submodule) or in a sibling folder `..\PCERecomp`; `-DPCERECOMP_DIR=`

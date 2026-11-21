@@ -275,25 +275,38 @@ roms/ 直下に北米版の cue と bin 43 本、System Card (USA) v2.0 を上�
 - 試験の期待値（PASS_REGULAR_EXPRESSION、セッション、カバレッジ）は北米版専用。日本版には使えない。
 
 ### macOS
-- M3 の途中（M3-7 まで）：北米版のゲーム本体（生成 C、`ys_trace`、`YsRecomp.app`、パッケージ）は macOS でビルドでき、
-  `reference/` を入れて（M3-7）、history 以外の試験は skip 1 本（`perf_ys`：最適化の前の基準 `build/perf_ref/hle` がない。
-  Windows でも同じ）を除いて合格している。`app_prep_ys` はまれに失敗する（M3-5-1、原因は未特定）。
-  詳細とまとめ：review_portability/10_m3_plan.md の 8〜15 章（M3-8 で書き直す）。
-- 手順：`scripts/build.sh`（build.ps1 と同じ手順。`--test` / `--test-all` / `--test-hist` / `--verbose` /
-  `--target NAME`。`--package` は `dist/` に `YsRecomp.app` と zip を作る（M3-6））。生成器は Ninja Multi-Config で、実行ファイルは Windows と同じ
-  `build/Release/` に出る（拡張子なし。ツールは `tools/build_paths.py` で名前を決める）。Python は `.venv/bin/python`。
-    scripts/build.sh --target pce_app --target app_tests
-    ctest --test-dir build -C Release -R '^(app_config|app_volume|host_layers)$'
-- Geargrafx との比較（M3-7）：`external/PCERecomp/reference/` に Geargrafx のタグ `1.8.6`（`3d6345c`。`1.8.7` 以降は
-  PCERecomp のソースの一覧に `load_detector.cpp` がなくリンクできない）、HuC6280 の試験 `4ce378e`、Mednafen 1.32.1 の
-  3 ファイルを置く（取り方：PCERecomp の `docs/hardware/INDEX.md`。Geargrafx は `--branch 1.8.6`）。`gg_trace`・
-  `gg_cdinfo` は `external/PCERecomp/tools/reference_trace/build.sh` で 1 回作る（Windows は `build.ps1`。MSVC 以外は
-  `-ffp-contract=off` が必須で、CMake が付ける。ないと音の比較が失敗する）。詳細：review_portability/10_m3_plan.md の 15 章。
-- M2 の時点で macOS で確かめたもの：`pce_trace`・`bios_check` のビルド、ROM が必要な `app_disc_id`・`app_cd_menu_music`・
-  `recomp_disc_ys`・`bios_c_ys` の合格（review_portability/09_m2_rom_paths_editions.md）。ROM が見つかると生成 C の
-  ターゲットも定義されるので、M3 までは `--target` で必要なものだけをビルドする（引数なしの `scripts/build.sh` は生成 C の
-  生成と Clang でのコンパイルを始める）。
-- OS の差は `cmake/platform_{windows,macos}.cmake` と `runtime/host/{win,null,common}` に置く。
+- 状態（M3 完了、2026-11-22）：北米版のゲーム本体（生成 C、`ys_trace`、`YsRecomp.app`、パッケージ）は macOS arm64 で
+  警告なしにビルドでき、試験 100 本のうち 99 本が合格、skip 1 本（`perf_ys`：最適化の前の基準 `build/perf_ref/hle` が
+  ない。Windows でも同じ）、失敗 0。これが macOS の基準 M-US。`app_prep_ys` はまれに失敗する（M3-5-1、原因は未特定。
+  失敗すると前後の記録を出す）。まとめ：review_portability/11_m3_summary.md（経過は 10_m3_plan.md）。
+- 前提：Apple Silicon、macOS 13 以上（`.app` の最低の版。開発機は macOS 27）、Xcode Command Line Tools（Apple Clang）、
+  Homebrew の `cmake` と `ninja`、`.venv` の Python 3.11 以上（開発機は 3.14）。SDL3 3.2.30 は初回の構成で CMake が取る。
+  ディスクと BIOS は `roms/usa/`・`roms/bios/`（「roms/ の配置」の節）。
+- 手順：`scripts/build.sh`（build.ps1 と同じ手順とオプション）。生成器は Ninja Multi-Config で、実行ファイルは Windows と
+  同じ `build/Release/` に出る（拡張子なし。ツールは `tools/build_paths.py` で名前を決める）。開発機での時間の目安：
+    scripts/build.sh              # ビルド。初回は生成 C の生成とコンパイルで約 5 分（同時 4 本、最大 2.7 GB）
+    scripts/build.sh --test       # quick ラベル
+    scripts/build.sh --test-all   # history 以外の全試験（約 19 分、-j 4）
+    scripts/build.sh --test-hist  # history ラベル（約 12 分）
+    scripts/build.sh --package    # dist/YsRecomp/（YsRecomp.app と README.txt）と dist/YsRecomp.zip
+    scripts/build.sh --target app_tests   # そのターゲットだけ（--verbose：すべて表示、--edition usa|jp|all）
+- プレイヤー：`build/Release/YsRecomp.app`（`$<TARGET_FILE>` は `Contents/MacOS/YsRecomp`。試験はそれを動かす）。
+  設定・セーブ・セッション・`menu_font.bin`・`launcher_sfx.bin` は `~/Library/Application Support/YsRecomp/`
+  （`host_paths`。Windows は実行ファイルの隣のまま）。試験は環境変数 `PCE_USER_DIR` で一時フォルダに向ける（本物に触れない）。
+  ランチャーの画像とアイコンは `.app` の `Contents/Resources/`。全画面は Cmd+Ctrl+F（Alt+Enter も使える。設定は窓に合わせて
+  変わる）。ad-hoc 署名だけなので、配った zip の `.app` は初回に右クリック→「開く」か、システム設定の
+  「プライバシーとセキュリティ」で「このまま開く」が要る（`package/README-macOS.txt`）。
+- Geargrafx との比較：`external/PCERecomp/reference/` に Geargrafx のタグ `1.8.6`（`3d6345c`。`1.8.7` 以降は PCERecomp の
+  ソースの一覧に `load_detector.cpp` がなくリンクできない）、HuC6280 の試験 `4ce378e`、Mednafen 1.32.1 の 3 ファイルを置く
+  （取り方：PCERecomp の `docs/hardware/INDEX.md`。Geargrafx は `--branch 1.8.6`）。`gg_trace`・`gg_cdinfo` は
+  `external/PCERecomp/tools/reference_trace/build.sh` で 1 回作る（Windows は `build.ps1`。MSVC 以外は `-ffp-contract=off` が
+  必須で、CMake が付ける。ないと音の比較が失敗する）。
+- macOS の設定は `cmake/platform_macos.cmake`：arm64 だけ、`-ffp-contract=off`（Windows と同じ浮動小数点の結果）、生成 C の
+  同時のコンパイルを 4 本まで（job pool）、SDL3 の非推奨 API の警告は SDL3 だけで抑える、`.app` の組み立て（`Info.plist` は
+  `runtime/host/mac/Info.plist.in`、`.icns` は `make_icon.py --iconset` と `iconutil`、`codesign --sign -`）。
+- host 層の macOS の実装は `runtime/host/mac/paths_mac.c`（書き込み先）だけ。vblank の時刻・GPU 時間・優先度は null のまま
+  （R11、R12、M1-3。M3 の範囲外）。
+- OS の差は `cmake/platform_{windows,macos}.cmake` と `runtime/host/{win,mac,null,common}` に置く。
   層の規則は試験 `host_layers`（`tools/check_layers.py`、quick）が確かめる。
 - 版の差は `cmake/ys_edition.cmake` の `ys_edition()` と `tools/editions.py` に置く。版の試験にはラベル（`usa`）が付く。
   `build.ps1 -Edition usa|jp|all` / `scripts/build.sh --edition ...`（既定 `all`）は、ほかの版の試験を `-LE` で除く

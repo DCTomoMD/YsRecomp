@@ -796,3 +796,46 @@ YsRecomp：`CLAUDE.md` の macOS の節（Q25：`reference/` の版と `build.sh
   Mac で別の .ini を使っている）。② プログラムが出した後の経路（SDL3 の変換、Windows の音の仕組み、音の装置やスピーカー）。
 - 切り分けの案：両方で同じ .ini と同じセッションを `--audio-wav` で記録し、WAV が同じかを比べる（同じなら ②、違えば
   プログラムの中）。まず Windows と Mac の .ini の音の設定を比べる。実施はユーザーの指示があってから。
+
+## 16. M3-8 の計画（まとめ）
+
+### 16.1 やること（6 章の表の M3-8）
+
+1. macOS：history の 10 本（`motion_save_ys`、`cd_pop_ys`、`crop_flash_ys`、`item_window_ys`、`gpu_window_ys`、
+   `motion_intro2_ys`、`motion_cave_ys`、`motion_light_ys`、`motion_ys`、`motion_temple_ys`）。history 以外の 90 本は
+   M3-7 で済んでいる（15.4。89 本合格、skip 1 本）。history が合格すれば、R06（浮動小数点の一致）と Q11（game スレッドの
+   スタック、溢れなければ閉じる）を閉じる。
+2. macOS と Windows の結果を比べる表（E7）：試験ごとに両方の結果と時間を並べる。Windows の結果は 4 の確認で受け取る。
+3. M-US の記録：`04_cross_platform_test_matrix.md` を更新する。
+4. CLAUDE.md の macOS の節を書き直し、README を更新する。
+5. Windows で M3 全体の before／after の確認（09 の 6 章と同じ形）。M3-3〜M3-5 のログがない分（14.6）と、M3-7 の 15.5 を含む。
+
+### 16.2 決めていただくこと
+
+| ID | 決めること | 案（推奨） | ほかの案 |
+|---|---|---|---|
+| Q27 | M3 のまとめを置く場所 | **新しい文書 `review_portability/11_m3_summary.md`**：結果、決定（D・Q）、閉じたリスク、残ったこと、macOS と Windows の比較の表（E7）を短くまとめる。この文書（10）は経過の記録として残す | この文書に 17 章として足す |
+| Q28 | README.md | **macOS を足す**：冒頭の「Windows」を「Windows と macOS（Apple silicon）」に、「How to play」に macOS（`.app`、初回の開き方、データの場所は README-macOS.txt と同じ）、「Building from source」に macOS（Xcode Command Line Tools、Homebrew の cmake と ninja、Python 3.11 以上の `.venv`、`scripts/build.sh`）。英語で、上流の文の形に合わせる | 日本版の対応が終わる Phase 4 まで README は変えない（macOS の情報は CLAUDE.md と review_portability だけ） |
+| Q29 | Windows での M3 全体の確認 | **before／after の両方（09 の 6 章と同じ形）**：先に `reference/`（Geargrafx `1.8.6`、HuC6280 の試験 `4ce378e`）を入れて `gg_trace.exe` を作り、before＝`d0430b1`（M3-1 の直前）と after＝ブランチの先頭で、ビルドの警告、試験の一覧、history 以外の全試験、history、パッケージの zip を比べる。両方で Geargrafx の比較が動くので、before の skip も 1 本（`perf_ys`）になるはず。ログは `m38_*.txt` に残す。所要時間は 1 時間半ほど（生成 C のビルド 2 回、全試験 2 回、history 2 回） | after だけ動かし、M2 の Windows の結果（09 の 7 章）と比べる（M3-3〜M3-5 の前後の差がログで示せない） |
+| Q30 | `04` の更新のしかた | **M0 の表は計画として残し、「6. M3 の結果（M-US）」の章を足す**：試験の行ごとに M-US の実際の結果（✓・skip とその理由）を書き、2 章の「状態」の列を更新する | 3 章の表の M-US の列を書き換える（M0 の時点の見込みが消える） |
+| Q31 | BGM のノイズ（15.6）の手がかり | **Windows の確認に、.ini の音の設定を表示するだけの手順を足す**（`dist\YsRecomp\YsRecomp.ini` の `chip_filter` と `volume_*`。読むだけ）。Mac の設定は `chip_filter=1`、音量はすべて 100 [C]。違いがあれば記録し、切り分けは別の件として扱う | 足さない（M3-8 の範囲外として、別の機会に調べる） |
+
+### 16.3 macOS の history（2026-11-22、`ecd7442`）
+
+- `ctest -L history`（1 本ずつ）：**10 本すべて合格、失敗 0、skip 0**（727 秒）[C]。時間：`motion_save_ys` 75 秒、`cd_pop_ys`
+  97 秒、`crop_flash_ys` 126 秒、`item_window_ys` 37 秒、`gpu_window_ys` 32 秒、`motion_intro2_ys` 127 秒、`motion_cave_ys`
+  85 秒、`motion_light_ys` 61 秒、`motion_ys` 45 秒、`motion_temple_ys` 41 秒。
+- これで macOS の 100 本は、合格 99 本、skip 1 本（`perf_ys`）、失敗 0（history 以外は 15.4）。
+- R06（浮動小数点の一致）：期待値が固定の試験（M3-2）と history が合格したので閉じる。Q11（game スレッドのスタック）：
+  history の長いセッションでも溢れなかったので、変えずに閉じる。
+
+### 16.4 回答と、M3-8 で書いたもの
+
+**2026-11-22：ユーザーの回答は「Q27〜Q31 は全部推奨で」。** 書いたもの：
+
+- `11_m3_summary.md`（新規、Q27）：結論、終了条件 E1〜E7、各段の結果、決定と閉じたリスク、残ったこと、Windows での M3 全体の
+  確認手順（5 章、Q29・Q31）、macOS と Windows の比較の表（6 章、E7。Windows の列は確認の後に埋める）。
+- `04_cross_platform_test_matrix.md`：2 章の M-US の状態と、6 章「M3 の結果（M-US）」（Q30）。
+- `CLAUDE.md`：macOS の節を書き直した（状態、前提、手順と時間、プレイヤーとデータの場所、Geargrafx、macOS の設定、host 層）。
+- `README.md`：冒頭、遊び方（macOS）、全画面のキー、macOS でのビルド（Q28）。
+- 次：ユーザーが Windows で `11` の 5 章を実行し、結果を受けて `11` の 6 章と E6・E7 を閉じる。

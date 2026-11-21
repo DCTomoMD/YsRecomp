@@ -23,7 +23,7 @@
 |---|---|---|---|---|
 | W-US | Windows x64（VM） | 北米版 | US System Card 2.0（`--bios` のときだけ） | 上流で動いている [A]。**Windows VM で確認が必要** |
 | W-JP | Windows x64（VM） | 日本版 | 日本版 System Card（種類は [U]） | 未対応（Phase 3 以降） |
-| M-US | macOS arm64 | 北米版 | US 2.0 | ビルドできない（M3 で新しい基準にする） |
+| M-US | macOS arm64 | 北米版 | US 2.0 | ビルドできない（M3 で新しい基準にする）→ **M3 で基準になった**（2026-11-22：100 本のうち 99 本合格、skip 1 本、失敗 0。6 章） |
 | M-JP | macOS arm64 | 日本版 | 日本版 | 未対応（Phase 3 以降） |
 
 ---
@@ -107,3 +107,42 @@ ctest --test-dir build -L quick --output-on-failure
 - 区分のラベル：`public` / `private`
 - 既存のラベル（quick、console、recomp、history、package）に加えて付ける。例：`ctest -L "quick" -L "usa"`
 - OS は実行する機械で決まるので、ラベルにしない。
+
+---
+
+## 6. M3 の結果（M-US、2026-11-22）
+
+- 3 章の表は M0 の時点の見込みとして残す（Q30）。実際の結果をこの章に書く。
+- 対象：`ecd7442`（PCERecomp `76ab827`）。`reference/` に Geargrafx `1.8.6`、HuC6280 の試験 `4ce378e` を入れた状態。
+- 試験ごとの結果と時間：`11_m3_summary.md` の 6 章（Windows の列は M3 全体の確認の後に埋める）。
+
+### 6.1 3 章の行ごとの結果
+
+| 試験（3 章の行） | M0 の見込み | M3 の結果（M-US） | 備考 |
+|---|---|---|---|
+| app_config ほか public の app_* | △ | ✓ 合格 [C] | |
+| app_input | △（仮想ジョイスティック [U]） | ✓ 合格 [C] | macOS の SDL3 でも仮想ジョイスティックが動いた |
+| PCERecomp の単体試験 | △ | ✓ 合格 [C] | `cd_image` はフォークで実行ファイル名を直した（M3-7）。`cpu_huc6280` は `reference/` を入れて合格 |
+| host 層の依存の向き（`host_layers`） | N | ✓ 合格 [C] | M1 で新設 |
+| `host_paths` | N | ✓ 合格 [C] | M3-4 で新設（Windows：実行ファイルの隣、macOS：Application Support） |
+| profile の選択（日米） | N | ― | Phase 3 |
+| app_disc_id、app_cd_menu_music | △ | ✓ 合格 [C] | M2 |
+| app_start_ys、app_mark_ys、nobios_ys、nobios_cabin_ys | △ | ✓ 合格 [C] | 隠した窓の Metal（R20）で描けた |
+| equip_c_ys、equip_preview_ys、equip_ice_preview_ys | △ | ✓ 合格 [C] | |
+| recomp_disc_ys、coverage_ys | △ | ✓ 合格 [C] | |
+| ys_recomp の生成とコンパイル | △ | ✓ 成功 [C] | 4 分 27 秒、最大 2.7 GB、警告 0。生成 C は Windows と同じ（R25） |
+| trace_ys_*、session_ys_*、fade_ys、hle_timing_ys | △（gg_trace が要る） | ✓ 合格 [C] | Geargrafx は `-ffp-contract=off` でビルドしないと音の比較が失敗する（M3-7） |
+| bios_c_ys | ✗（偽の skip、R08） | ✓ 合格 [C] | M2 でヘッダーのパスを直した |
+| ロックステップ | △ | ✓ 合格 [C] | |
+| 期待値が固定の試験 | △（FMA、R06） | ✓ 合格 [C] | 期待値は Windows と同じまま |
+| history（10 本） | △ | ✓ 合格 [C] | 727 秒 |
+| 実時間の試験（`TESTS_TEMPO_REAL`） | △ | ✓ 合格 [C] | しきい値は緩めていない。`app_prep_ys` はまれに失敗する（M3-5-1、原因は未特定。`--repeat until-pass:2` で実行） |
+| app_package_ys、app_launcher_ys | ✗（R07） | ✓ 合格 [C] | `app_package_ys` は macOS 用のスクリプト（`run_package_test_macos.py`、M3-6） |
+| perf_ys | （3 章に行なし） | skip（77） | 最適化の前の基準 `build/perf_ref/hle` がない。Windows でも同じ。合格には数えない |
+
+### 6.2 4 章の条件との照合
+
+- M-US の条件「public がすべて合格する。private のうち recomp・quick・history が合格する。console は D5 しだい。skip は件数と
+  理由を記録し、合格には数えない」：**満たした** [C]。console も D5（Geargrafx を macOS でも使う）のとおり合格した。
+  skip は 1 本（`perf_ys`、理由は上）。
+- W-US の条件（上流の全件が合格し、skip が上流と同じ件数）：M3 全体の Windows での確認（`11_m3_summary.md` の 5 章）で確かめる。
