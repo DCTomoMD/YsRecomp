@@ -497,3 +497,37 @@ Windows で変わったのは、`CMakeLists.txt` の `platform_sdl(SDL3-static)`
 
 - これからの全試験（M3-6〜M3-8、Windows の確認）で失敗したときは、ctest の出力に原因を見るための行が出る。その記録で原因を決める。
 - Windows で確かめること（10.6・11.4・12.4.1 と一緒に）：**Z2** `app_prep_ys` が今までどおり合格する（記録の環境変数は Windows でも同じ意味）。
+
+### 12.11 12.4 の手での確認の結果（2026-11-21、ユーザー）
+
+| # | 結果 |
+|---|---|
+| 1 | アイコンは正しく表示された |
+| 2 | ランチャー（メニュー画面）は正しく動いた |
+| 3 | Cmd+Ctrl+F は正しく動いた。最初は全画面で起動し、Cmd+Ctrl+F で窓モードになる（**Windows 版の Alt+Enter と同じ挙動**、ユーザーの確認）。終了後の ini は `fullscreen=0`（最後の状態と合う）[C] |
+| 4 | `~/Library/Application Support/YsRecomp/` に `YsRecomp.ini`・`saves/`・`menu_font.bin`・`launcher_sfx.bin` ができた [C] |
+| 5 | `build/Release/` に新しいファイルはない（あるのはビルドで作られたものだけ：試験用のプログラム、`.a`、`YsRecomp.app`）[C] |
+
+- H3 の手での確認は完了。M3-5 の macOS の確認は、M3-5-1（`app_prep_ys`、12.10 の記録待ち）を除いて完了。
+
+## 13. M3-6 の計画（パッケージ）
+
+### 13.1 調べたこと
+
+- `make_package.py` は Windows 専用：`.exe` の DLL とアイコンを確かめ、`dist/YsRecomp/`（`YsRecomp.exe`、`README.txt`、`launcher/`）と `dist/YsRecomp.zip` を作る。前にプレイしたフォルダの ini・`saves/` などを残す（`KEEP`）。zip には、プログラムが一度動いて作った `menu_font.bin`・`launcher_sfx.bin`（ディスクから作るもの）も入れる。
+- `run_package_test.py`（`app_package_ys`）は、zip を一時フォルダに展開し、`.exe` の隣に ini を置いて**引数なしで起動**し、セーブと記録のセッションが `.exe` の隣にできることを確かめる。
+- `package/README.txt` は Windows 向け（Windows 10/11、Alt+Enter、「すべて YsRecomp フォルダの中」など）。
+- **macOS では、引数なしの起動は `~/Library/Application Support/YsRecomp/` を使う。** そこには今、ユーザーが実際にプレイした ini とセーブがある [C]。`HOME` を替えても書き込み先は替わらない（`HOME=<別のフォルダ> app_tests paths pref` でも本物のホームのフォルダになった）[C]。そのため、パッケージの試験を今の形で macOS で動かすと、**ユーザーの本物の設定とセーブに書き込んでしまう**。
+
+### 13.2 決めていただくこと
+
+| ID | 質問 | 案（推奨を先に） |
+|---|---|---|
+| Q18 | パッケージの試験が、ユーザーの本物の Application Support に触れないようにする方法 | **案 A（推奨）**：試験用の環境変数 `PCE_USER_DIR` を host 層に足す（設定されていれば、書き込み先をそのフォルダにする。すべての OS で同じ意味。設定しなければ今と同じ）。macOS のパッケージの試験は、一時フォルダを `PCE_USER_DIR` にして `.app` を起動する。`host_paths` の試験にも、この変数の確認を足す。<br>案 B：試験の中だけ別の `app_id` を使うオプションを足す（`--app-id`）。<br>案 C：引数なしの起動は試験せず、`--config` で起動する（プレイヤーと同じ起動を確かめられなくなるので推奨しない） |
+| Q19 | macOS のパッケージの形 | **`dist/YsRecomp/`（`YsRecomp.app` と `README.txt`）と `dist/YsRecomp.zip`**。zip は `ditto -c -k --keepParent`（Q6、実行権限・署名・属性を保つ）。`launcher/` は `.app` の中にあるので外には置かない。設定とセーブは Application Support にあるので、`KEEP` はない（作り直すたびにフォルダを作り直す） |
+| Q20 | `menu_font.bin`・`launcher_sfx.bin`（ディスクから作るもの）を macOS の zip に入れるか | **入れない**。macOS ではプログラムが Application Support に作るので、パッケージのフォルダにはできない。初回の起動でプレイヤーのディスクから作られる（Windows でも、ないときはそうなる）。ROM 由来のデータを配布物に入れないことにもなる（作業規則 v2 の 3）。Windows の zip は今のまま |
+| Q21 | macOS の README | **`package/README-macOS.txt` を新しく作る**（Windows の `README.txt` は変えない）。zip の中では `README.txt` という名前にする。中身：必要なもの（macOS 13 以降、Apple Silicon）、初回の開き方（自分で署名した ad-hoc なので、Finder で右クリック →「開く」、または「システム設定 → プライバシーとセキュリティ →このまま開く」。D12）、全画面は Cmd+Ctrl+F・Alt+Enter・緑のボタン、ファイルの場所（`~/Library/Application Support/YsRecomp/`）。操作とオプションの説明は Windows 版と同じ文 |
+| Q22 | 試験の名前 | **`app_package_ys` のまま**（どちらの OS でも試験の名前は同じ 100 本）。CMake が OS ごとのスクリプトを渡す（Windows：今の `run_package_test.py`、macOS：新しい `run_package_test_macos.py`）。macOS の試験は、`.app` の署名（`codesign -v`）、`Info.plist`、実行権限、zip の中身、zip を展開した `.app` が `PCE_USER_DIR` の一時フォルダで起動し、セーブと記録のセッションがそこにできることを確かめる。`reference/`・GPL のものが入っていないことも確かめる（K6） |
+
+- `scripts/build.sh --package` は、`build.ps1 -Package` と同じ手順（`package` ラベルの試験、`make_package.py`）にする。
+- Windows の `make_package.py` の動き（`.exe`、`KEEP`、zip の中身）は変えない。Windows で前後の zip の中身が同じことを確かめる（5 章）。
