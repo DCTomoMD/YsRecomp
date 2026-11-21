@@ -21,7 +21,7 @@
 
 | 組 | OS | ディスク | BIOS | 状態（M0 時点） |
 |---|---|---|---|---|
-| W-US | Windows x64（VM） | 北米版 | US System Card 2.0（`--bios` のときだけ） | 上流で動いている [A]。**Windows VM で確認が必要** |
+| W-US | Windows x64（VM） | 北米版 | US System Card 2.0（`--bios` のときだけ） | 上流で動いている [A]。**Windows VM で確認が必要** → **M3 で確かめた**（2026-11-22、Windows 11 の実機：100 本のうち 99 本合格、skip 1 本、失敗 0。M3 の前と同じ。6 章） |
 | W-JP | Windows x64（VM） | 日本版 | 日本版 System Card（種類は [U]） | 未対応（Phase 3 以降） |
 | M-US | macOS arm64 | 北米版 | US 2.0 | ビルドできない（M3 で新しい基準にする）→ **M3 で基準になった**（2026-11-22：100 本のうち 99 本合格、skip 1 本、失敗 0。6 章） |
 | M-JP | macOS arm64 | 日本版 | 日本版 | 未対応（Phase 3 以降） |
@@ -114,7 +114,7 @@ ctest --test-dir build -L quick --output-on-failure
 
 - 3 章の表は M0 の時点の見込みとして残す（Q30）。実際の結果をこの章に書く。
 - 対象：`ecd7442`（PCERecomp `76ab827`）。`reference/` に Geargrafx `1.8.6`、HuC6280 の試験 `4ce378e` を入れた状態。
-- 試験ごとの結果と時間：`11_m3_summary.md` の 6 章（Windows の列は M3 全体の確認の後に埋める）。
+- 試験ごとの結果と時間：`11_m3_summary.md` の 6 章。Windows の列も埋めた（2026-11-22、`1a54bc7`）。合否は 100 本とも同じ。
 
 ### 6.1 3 章の行ごとの結果
 
@@ -145,4 +145,6 @@ ctest --test-dir build -L quick --output-on-failure
 - M-US の条件「public がすべて合格する。private のうち recomp・quick・history が合格する。console は D5 しだい。skip は件数と
   理由を記録し、合格には数えない」：**満たした** [C]。console も D5（Geargrafx を macOS でも使う）のとおり合格した。
   skip は 1 本（`perf_ys`、理由は上）。
-- W-US の条件（上流の全件が合格し、skip が上流と同じ件数）：M3 全体の Windows での確認（`11_m3_summary.md` の 5 章）で確かめる。
+- W-US の条件（上流の全件が合格し、skip が上流と同じ件数）：**満たした** [C]（`11_m3_summary.md` の 5.7）。after の 100 本
+  （うち `host_paths` は M3 で足した）のうち 99 本が合格。skip は `perf_ys` の 1 本で、M3 の前（`d0430b1`）と同じ件数。
+  M3 の前後で結果は変わっていない。

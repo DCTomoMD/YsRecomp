@@ -796,6 +796,9 @@ YsRecomp：`CLAUDE.md` の macOS の節（Q25：`reference/` の版と `build.sh
   Mac で別の .ini を使っている）。② プログラムが出した後の経路（SDL3 の変換、Windows の音の仕組み、音の装置やスピーカー）。
 - 切り分けの案：両方で同じ .ini と同じセッションを `--audio-wav` で記録し、WAV が同じかを比べる（同じなら ②、違えば
   プログラムの中）。まず Windows と Mac の .ini の音の設定を比べる。実施はユーザーの指示があってから。
+- 2026-11-22（M3-8 の Windows の確認、`11` の 5.7 の V8）：Windows の .ini（`C:\work\icon_before\YsRecomp.ini`）は
+  `chip_filter=1`、音量はすべて 100 で、Mac と同じ [C]。① の見込みは低い [A]。Q31 の案の `dist\YsRecomp\YsRecomp.ini` は
+  誤りで（.ini は遊んだ `YsRecomp.exe` の隣にでき、作ったばかりの `dist` にはない）、`11` の 5.3 の手順を直した。
 
 ## 16. M3-8 の計画（まとめ）
 
@@ -839,3 +842,13 @@ YsRecomp：`CLAUDE.md` の macOS の節（Q25：`reference/` の版と `build.sh
 - `CLAUDE.md`：macOS の節を書き直した（状態、前提、手順と時間、プレイヤーとデータの場所、Geargrafx、macOS の設定、host 層）。
 - `README.md`：冒頭、遊び方（macOS）、全画面のキー、macOS でのビルド（Q28）。
 - 次：ユーザーが Windows で `11` の 5 章を実行し、結果を受けて `11` の 6 章と E6・E7 を閉じる。
+
+### 16.5 Windows での M3 全体の確認（2026-11-22）
+
+- ユーザーが `11` の 5 章を Windows 11 の実機で実行した。V1〜V8 はすべて期待どおり [C]。詳細は `11` の 5.7。
+- 要点：before（`d0430b1`）と after（`1a54bc7`、PCERecomp `76ab827`）とも警告なし。history 以外は 89 本→90 本（増えたのは
+  `host_paths`）がすべて合格、skip は `perf_ys` だけ。history 10 本合格。zip の差は `YsRecomp.exe` の大きさだけ。
+  `app_prep_ys` は 1 回目で合格。
+- これで E6・E7 を閉じた。`11` の 6 章の Windows の列を埋め、違いを 6.1 に書いた。`04` の 2 章と 6.2 の W-US も更新した。
+- 15.5（Windows の `cd_image`、Geargrafx `1.8.6`）も確かめた：`cd_image` は `.exe` の名前のまま合格。
+- M3 はこれで終わり。次は Phase 3A（ユーザーの指示があってから）。
