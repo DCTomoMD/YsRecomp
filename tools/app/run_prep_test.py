@@ -29,9 +29,11 @@ def run(exe, cue, session, bram, frames, menu, work, name, extra):
     shutil.copyfile(bram, save)
     hashes = os.path.join(work, name + ".hash")
     ini = os.path.join(work, "prep.ini")
+    # Pacing logs (window stalled, clock jumps and holds; a few hundred lines): only to explain a failure (log_lines)
+    env = {**os.environ, "PCE_AUDIO_LOG": "1", "PCE_PACE_LOG": "1"}
     r = subprocess.run([exe, cue, "--input", session, "--save", save, "--frames", str(frames), "--config", ini,
                         "--window-size", "960", "540", "--menu-test", str(menu), "--prep-hashes", hashes, *extra],
-                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900, env=env)
     with open(os.path.join(work, name + ".txt"), "w", encoding="utf-8") as f:
         f.write(r.stdout)
     if r.returncode != 0 or f"Window closed after {frames} frames" not in r.stdout:
@@ -44,6 +46,24 @@ def run(exe, cue, session, bram, frames, menu, work, name, extra):
     with open(hashes, encoding="utf-8") as f:
         lines = [tuple(l.split()) for l in f if l.strip()]
     return lines, r.stdout
+
+
+LOG_LINES = re.compile(r"window stalled|clock: |frame took")
+NEAR = 30  # frames around a missing one
+
+
+def log_lines(out, frames):
+    """The pacing log lines (PCE_AUDIO_LOG, PCE_PACE_LOG) near the given frames: "[frame N] ..." lines within NEAR
+    frames, and every "[T s] window stalled" and "[T s] frame took" line (counted in seconds, not frames).
+    Diagnostic only: the pass condition does not use it."""
+    lines = []
+    for line in out.splitlines():
+        if not LOG_LINES.search(line):
+            continue
+        m = re.match(r"\[frame (\d+)\]", line)
+        if m is None or any(abs(int(m.group(1)) - f) <= NEAR for f in frames):
+            lines.append(line)
+    return lines[:40]
 
 
 def main():
@@ -84,6 +104,12 @@ def main():
         ok = False
     if only or len(common) < (frames - START) * 0.99:
         print("FAILED: frame prepared in only one of them (outside the start)")
+        for name, out, have in (("own thread", out_par, a), ("window", out_inl, b)):
+            missing = [s for s in only if s not in have]
+            if missing:
+                print(f"  missing in the {name} run: {missing[:10]}; its pacing log near them:")
+                for line in log_lines(out, missing):
+                    print("    " + line)
         ok = False
     print("OK: the frame prepared on its own thread equals the one prepared by the window." if ok else "FAILED")
     return 0 if ok else 1
