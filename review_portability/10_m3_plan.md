@@ -648,3 +648,32 @@ Select-String -Path m36_*.txt -Pattern "warning|tests passed|\*\*\*Failed|Not Ru
 ### 14.5 結果を貼るときの内容
 
 `m36_results.txt` の中身、2 つの `Compare-Object` の出力、`git status --short` の出力、14.3 の 1〜3 の結果。
+
+### 14.6 結果（2026-11-22）
+
+Windows 11 x64（M2 と同じ実機）、`C:\work\YsRecomp`。
+
+**M3-3〜M3-5（X1〜X3・Y1〜Y3・Z1〜Z2）**：ユーザーの報告は「Windows での動作は期待どおり」（`911ad88` で実行）。
+ただし、14.1・14.2 のログ（`m36_before_*.txt`・`m36_after_*.txt`）はこのフォルダに残っていない。警告の差（X1）、
+全試験の本数と結果（X2）、`app_prep_ys` の失敗の有無（Z2）は、ログで確かめていない。ログによる確認は M3-8 の
+Windows での全体確認でまとめて行う（未確認として残す）。
+
+**M3-6（P1〜P3）**：`c16ecde` でビルドして、次を実行した（14.2 の一部。before の zip 一覧はないので P3 は中身を直接見た）。
+
+```powershell
+ctest --test-dir build -C Release -R "^(host_paths|app_package_ys)$" -V *> m36_p.txt
+.\build.ps1 -Package *> m36_p_package.txt
+python -c "import zipfile;[print(i.filename,i.file_size) for i in zipfile.ZipFile('dist/YsRecomp.zip').infolist()]" *> m36_p_zip.txt
+```
+
+| ID | 結果 | 根拠 |
+|---|---|---|
+| P1 | 合格 | `host_paths` 合格。`paths: user data C:\work\YsRecomp\build\Release\`（今までどおり実行ファイルの隣）。`paths: with PCE_USER_DIR, user data C:/work/YsRecomp/build/app_output/host_paths/user/` |
+| P2 | 合格 | `app_package_ys` 合格（9.39 秒）。`OK: package with ['README.txt', 'YsRecomp.exe', 'launcher']`、`OK: building again keeps ...`、`OK: the package ran in a clean folder and reached the game.`。`m36_p.txt`・`m36_p_package.txt` とも `100% tests passed, 0 tests failed out of 2` |
+| P3 | 合格（中身を直接確認） | zip の中身は `YsRecomp/YsRecomp.exe`（110402560 バイト）、`YsRecomp/README.txt`（6308）、`YsRecomp/launcher/` の jpg 4 枚だけ（28521 KB）。`.app`・`README-macOS`・`.ini`・`.bin` はない。before との大きさの比較はしていない |
+
+- `git status --short`：追跡しているファイルの変更はない（`.ico` は書き直されていない）。` M external/PCERecomp` が出た。
+  サブモジュールが記録の `728e91b` でなく、前の `2e86f2c` のままと考えられる（ASSUMPTION。今回の手順に
+  `git submodule update` を入れていなかった）。`2e86f2c` と `728e91b` の差は `pce_trace.c` の 1 行（printf のキャスト）
+  だけで、`YsRecomp.exe` には入らないので、P1〜P3 の結果は変わらない。サブモジュールの位置は、ユーザーの確認待ち。
+- `??` の `*.txt` は M2・M3 の確認で作ったログ（コミットしない）。
