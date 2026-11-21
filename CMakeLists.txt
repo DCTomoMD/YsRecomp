@@ -13,7 +13,8 @@ endif()
 
 # Operating system: compiler flags, host layer sources (runtime/host), generated-code flags and the executable's
 # resources. Each file defines PLATFORM_HOST_SOURCES, PLATFORM_HOST_LIBRARIES, platform_generated_code(target),
-# platform_app_executable(target) and platform_sdl(target). Edition (USA / JP) differences never go there.
+# platform_app_executable(target), platform_sdl(target), PLATFORM_USER_DIR and PLATFORM_PACKAGE_TEST.
+# Edition (USA / JP) differences never go there.
 if(WIN32)
     include(cmake/platform_windows.cmake)
 elseif(APPLE)
@@ -148,7 +149,7 @@ add_test(NAME app_cd_menu_music COMMAND app_tests cdmenu "${YS_USA_CUE}")
 set_tests_properties(app_cd_menu_music PROPERTIES SKIP_RETURN_CODE 77)
 # Where the program reads its resources and writes the user's data (host layer; the OS policy comes from
 # cmake/platform_*.cmake: next to the executable on Windows, Application Support on macOS).
-add_test(NAME host_paths COMMAND app_tests paths ${PLATFORM_USER_DIR})
+add_test(NAME host_paths COMMAND app_tests paths ${PLATFORM_USER_DIR} "${CMAKE_BINARY_DIR}/app_output/host_paths")
 
 
 find_program(PYTHON_EXE NAMES python python3)

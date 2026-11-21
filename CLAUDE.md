@@ -275,10 +275,11 @@ roms/ 直下に北米版の cue と bin 43 本、System Card (USA) v2.0 を上�
 - 試験の期待値（PASS_REGULAR_EXPRESSION、セッション、カバレッジ）は北米版専用。日本版には使えない。
 
 ### macOS
-- ゲーム本体（生成 C、YsRecomp）は、まだビルドできない（M3）。M1 の時点で確認済みなのは、構成と
-  `pce_app`・`app_tests` のビルド、ROM 不要の quick 試験だけ（review_portability/06_m1_host_skeleton.md）。
+- M3 の途中（M3-6 まで）：北米版のゲーム本体（生成 C、`ys_trace`、`YsRecomp.app`、パッケージ）は macOS でビルドでき、
+  history 以外の試験は `reference/` がないもの（skip 7 本、`cpu_huc6280`）を除いて合格している。`app_prep_ys` はまれに
+  失敗する（M3-5-1、原因は未特定）。詳細とまとめ：review_portability/10_m3_plan.md の 8〜13 章（M3-8 で書き直す）。
 - 手順：`scripts/build.sh`（build.ps1 と同じ手順。`--test` / `--test-all` / `--test-hist` / `--verbose` /
-  `--target NAME`。`--package` は M3 まで使えない）。生成器は Ninja Multi-Config で、実行ファイルは Windows と同じ
+  `--target NAME`。`--package` は `dist/` に `YsRecomp.app` と zip を作る（M3-6））。生成器は Ninja Multi-Config で、実行ファイルは Windows と同じ
   `build/Release/` に出る（拡張子なし。ツールは `tools/build_paths.py` で名前を決める）。Python は `.venv/bin/python`。
     scripts/build.sh --target pce_app --target app_tests
     ctest --test-dir build -C Release -R '^(app_config|app_volume|host_layers)$'

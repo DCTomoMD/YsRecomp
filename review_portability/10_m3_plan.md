@@ -531,3 +531,120 @@ Windows で変わったのは、`CMakeLists.txt` の `platform_sdl(SDL3-static)`
 
 - `scripts/build.sh --package` は、`build.ps1 -Package` と同じ手順（`package` ラベルの試験、`make_package.py`）にする。
 - Windows の `make_package.py` の動き（`.exe`、`KEEP`、zip の中身）は変えない。Windows で前後の zip の中身が同じことを確かめる（5 章）。
+
+**2026-11-21：Q18〜Q22 の回答は「全部推奨で」。**
+
+### 13.3 M3-6 で直したこと
+
+| ファイル | 変更 |
+|---|---|
+| `runtime/host/common/host_paths_sdl.c`、`host_paths.h` | **`PCE_USER_DIR=FOLDER`**（試験用、すべての OS）：設定されていれば、書き込み先をそのフォルダにする（なければ作る）。設定しなければ今と同じ（Windows は実行ファイルの隣、macOS は Application Support）（Q18） |
+| `tests/app/app_tests.c`、`CMakeLists.txt` | `host_paths` の試験に、`PCE_USER_DIR` を設定したときの確認を足した（`app_tests paths <policy> <dir>`。書き込み先が `<dir>/user/` になり、フォルダが作られること） |
+| `tools/package/make_package.py` | macOS の分岐（`make_macos`）。`.app` の署名（`codesign --verify --strict`）、アイコン、ランチャーの画像を確かめ、`dist/YsRecomp/`（`YsRecomp.app` と `README.txt`）を毎回作り直し、`ditto -c -k --norsrc --noextattr --keepParent` で `dist/YsRecomp.zip` を作る（Q19）。`menu_font.bin`・`launcher_sfx.bin` は入れない（Q20）。**Windows の分岐は変えていない**（`MACOS` のときだけ `make_macos` へ） |
+| `package/README-macOS.txt`（新規） | macOS 用の README（Q21）。必要なもの（Apple silicon、macOS 13 以降）、初回の開き方（右クリック →「開く」、または「プライバシーとセキュリティ」→「このまま開く」）、全画面（Cmd+Ctrl+F、Option+Return、緑のボタン）、ファイルの場所（`~/Library/Application Support/YsRecomp/`）。オプションの説明は Windows 版と同じ文（Alt+Tab → Cmd+Tab だけ替えた）。zip の中では `README.txt` |
+| `tools/package/run_package_test_macos.py`（新規） | macOS の `app_package_ys`（Q22）：フォルダと zip の中身、署名、`Info.plist` の実行ファイル名、zip に `__MACOSX`・`._*`・`reference/`・Geargrafx・ディスクや設定のファイルがないこと（K6）、作り直しでフォルダが作り直されること。zip を一時フォルダに `ditto -x -k` で展開し、`PCE_USER_DIR` を一時フォルダにして引数なしで起動：600 フレーム、セーブ（2048 バイト）と記録のセッションがそのフォルダにでき、`.app` の隣に何もできず、起動後も署名が有効なこと |
+| `cmake/platform_*.cmake`、`cmake/ys_edition.cmake` | `PLATFORM_PACKAGE_TEST`：`app_package_ys` のスクリプトを OS ごとに選ぶ（Windows は今の `run_package_test.py`）。試験の名前は同じ |
+| `scripts/build.sh` | `--package`：`package` ラベルの試験（`--test-all` のときは省く）と `make_package.py`（`build.ps1 -Package` と同じ手順）。`--help` の範囲を 1 行のばした |
+
+### 13.4 macOS で確かめたこと
+
+| 実行したこと | 結果 |
+|---|---|
+| `scripts/build.sh` | 成功、警告 0 [C] |
+| `host_paths`、`host_layers`、`app_package_ys` | 3 本とも合格。`app_package_ys`：`OK: package with ['README.txt', 'YsRecomp.app'] (19751 KB zipped), signature valid`、`OK: building again makes the folder anew`、`OK: the package ran from a clean folder and reached the game; the user data went to PCE_USER_DIR.` [C] |
+| 本物の `~/Library/Application Support/YsRecomp/` | 試験の前後で `YsRecomp.ini` の更新時刻（12:45:34）が変わらず、セーブも 1 つのまま。**試験は本物の設定とセーブに触れていない** [C] |
+| zip を `ditto -x -k` と `unzip` の両方で展開 | どちらも署名が有効で、実行権限（`-rwxr-xr-x`）が残る [C] |
+| `scripts/build.sh --package` | `package` の 2 本が合格。`dist/YsRecomp/`（`README.txt`、`YsRecomp.app`）と `dist/YsRecomp.zip`（19751 KB）。`dist/` は `.gitignore` にある [C] |
+| quick（22 本） | 21 本合格、失敗は `cpu_huc6280` だけ（R21）[C] |
+
+- R07（macOS のパッケージの試験）は解決。
+
+### 13.5 Windows で確かめること（10.6・11.4・12.4.1 と一緒に）
+
+| ID | 確かめること |
+|---|---|
+| P1 | `host_paths` が合格し、`paths: with PCE_USER_DIR, user data ...\build\app_output\host_paths\user/` が出る |
+| P2 | `app_package_ys` が今までどおり合格する（Windows のスクリプトは変えていない） |
+| P3 | `.\build.ps1 -Package` の `dist\YsRecomp.zip` の中身（ファイルの一覧と大きさ）が、M3 の前と同じ |
+
+## 14. M3-3〜M3-6 の Windows での確認手順
+
+M2 と同じ実機（`07a` の 3 章、Windows 11 x64）、09 の 6 章と同じ形。10.6・11.4・12.4.1・13.5 の確認を 1 回にまとめる。
+
+- before：`4a92ba8`（M3-2。M3-3 の前）。サブモジュールは `2e86f2c`。
+- after：`feature/japanese-disc-support` の先頭（M3-6 のコミットとこの文書を含む）。サブモジュールはフォークの `728e91b`
+  （ブランチ `trace-format-warning`。M3-5 で `pce_trace.c` を 1 か所直した）。
+- Windows で変わったもの：`runtime/main.c`（`--screen-dump-wait`、全画面の設定を窓に合わせる処理）、`runtime/app/menu.c`
+  （`switch` の 2 つの分岐）、host 層（`paths_win.c`、`host_paths_sdl.c` の `PCE_USER_DIR`）、`app_tests.c`（`host_paths`）、
+  `CMakeLists.txt`・`platform_windows.cmake`（`platform_sdl` は空、`PLATFORM_*` の変数）、`run_menu_opening_test.py`、
+  `run_prep_test.py`（記録の環境変数）、`make_package.py`（macOS の分岐を足しただけ）、`pce_trace.c`（キャスト）。
+  試験は 99 本 → 100 本（`host_paths`）。
+
+### 14.1 before（`4a92ba8`）
+
+```powershell
+cd C:\work\YsRecomp
+$env:Path = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;" + $env:Path
+git fetch; git checkout 4a92ba8; git submodule update
+git log --oneline -1; git -C external/PCERecomp log --oneline -1      # -> 4a92ba8 / 2e86f2c
+Remove-Item -Recurse -Force build
+.\build.ps1 *> m36_before_build.txt
+ctest --test-dir build -C Release -N | Select-String "Total Tests"     # -> 99
+ctest --test-dir build -C Release -LE history -j 2 --repeat until-pass:2 *> m36_before_testall.txt
+ctest --test-dir build -C Release -N | Select-String "Test +#" | ForEach-Object { ($_ -split '\s+')[3] } | Set-Content m36_before_names.txt
+.\build.ps1 -Package *> m36_before_package.txt
+python -c "import zipfile;[print(i.filename,i.file_size) for i in zipfile.ZipFile('dist/YsRecomp.zip').infolist()]" *> m36_before_zip.txt
+```
+
+### 14.2 after（ブランチの先頭）
+
+```powershell
+# (in a new window, the $env:Path line of 14.1 again first)
+git checkout feature/japanese-disc-support; git pull
+git submodule sync; git submodule update
+git log --oneline -1; git -C external/PCERecomp log --oneline -1      # -> the branch tip / 728e91b
+Remove-Item -Recurse -Force build
+.\build.ps1 *> m36_after_build.txt
+ctest --test-dir build -C Release -N | Select-String "Total Tests"     # -> 100
+ctest --test-dir build -C Release -LE history -j 2 --repeat until-pass:2 *> m36_after_testall.txt
+ctest --test-dir build -C Release -N | Select-String "Test +#" | ForEach-Object { ($_ -split '\s+')[3] } | Set-Content m36_after_names.txt
+Compare-Object (Get-Content m36_before_names.txt) (Get-Content m36_after_names.txt)
+ctest --test-dir build -C Release -R "^(host_paths|app_menu_intro_ys|app_menu_image_ys|app_prep_ys)$" -V *> m36_after_detail.txt
+.\build.ps1 -Package *> m36_after_package.txt
+python -c "import zipfile;[print(i.filename,i.file_size) for i in zipfile.ZipFile('dist/YsRecomp.zip').infolist()]" *> m36_after_zip.txt
+Compare-Object (Get-Content m36_before_zip.txt) (Get-Content m36_after_zip.txt)
+git status --short                                                      # -> nothing (the .ico is not rewritten)
+```
+
+まとめ：
+
+```powershell
+Select-String -Path m36_*.txt -Pattern "warning|tests passed|\*\*\*Failed|Not Run|Skipped|Total Tests|paths:|lit pixels|newer frame|Prepared frames|missing in the|Package|Zip|Built" |
+  ForEach-Object { "$($_.Filename): $($_.Line.Trim())" } | Set-Content -Encoding utf8 m36_results.txt
+```
+
+### 14.3 手で確かめること（after の `dist\YsRecomp\`）
+
+1. `dist\YsRecomp\YsRecomp.exe` をダブルクリックで起動する（初めてならディスクのフォルダを選ぶ）。
+2. Alt+Enter で全画面と窓を 2 回行き来し、Esc → オプションメニュー → Video の「全画面」の表示が、そのときの状態と合う。
+3. 終了後、`dist\YsRecomp\YsRecomp.ini` の `fullscreen=` が最後の状態と合い、`dist\YsRecomp\saves\` がある（今までどおり実行ファイルの隣）。
+
+### 14.4 チェックポイント
+
+| ID | 確かめること | 元 |
+|---|---|---|
+| X1 | `m36_after_build.txt` に、before にない警告がない（`menu.c` を MSVC でもコンパイル） | 10.6 |
+| X2 | 全試験：before 89 本・after 90 本（history 以外）、最後まで失敗は `cpu_huc6280` だけ、skip は同じ 7 本 | 10.6 |
+| X3 | `m36_after_detail.txt`：`app_menu_intro_ys` が合格して `lit pixels` の行がある。`app_menu_image_ys` が合格 | 10.6 |
+| Y1・P1 | `Total Tests` が before 99・after 100。`Compare-Object` の差は `=> host_paths` の 1 行だけ。`host_paths` が合格し、`paths: user data` が `...\build\Release\`、`paths: with PCE_USER_DIR, user data ...\build\app_output\host_paths\user/` | 11.4・13.5 |
+| Y2・Y3 | 14.3 の 1〜3（ini と `saves\` が実行ファイルの隣。Alt+Enter で設定が合う） | 11.4 |
+| Z1 | `.\build.ps1` が `Built.` で終わる。`git status --short` が何も出さない（`ysrecomp.ico` が書き直されていない） | 12.4.1 |
+| Z2 | `m36_after_detail.txt`：`app_prep_ys` が合格（`Prepared frames` の行）。`m36_after_testall.txt` に `app_prep_ys` の `***Failed` があれば（2 回目で合格していても）、その行と `missing in the` の後の記録を貼る | 12.10 |
+| P2 | `app_package_ys` が合格（`m36_after_testall.txt`・`m36_after_package.txt`） | 13.5 |
+| P3 | zip の `Compare-Object` が何も出さない（中身と大きさが同じ。`YsRecomp.exe` の大きさが変わる場合は、その行を貼る） | 13.5 |
+
+- P3 の補足：`YsRecomp.exe` は `main.c` と `menu.c` を変えたので、大きさが変わることがある。そのときは差を説明として記録する（ほかのファイルが同じであればよい）。
+
+### 14.5 結果を貼るときの内容
+
+`m36_results.txt` の中身、2 つの `Compare-Object` の出力、`git status --short` の出力、14.3 の 1〜3 の結果。

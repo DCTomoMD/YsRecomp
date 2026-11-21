@@ -4,7 +4,8 @@
 #        scripts/build.sh --test       -> build and run the quick tests ("quick" group)
 #        scripts/build.sh --test-all   -> build and run every test except the "history" group, several at a time
 #        scripts/build.sh --test-hist  -> build and run the "history" group
-#        scripts/build.sh --package    -> the player package: not on macOS yet (.app, M3)
+#        scripts/build.sh --package    -> build, test the package ("package" group) and assemble the player package
+#                                         in dist/ (YsRecomp/ with YsRecomp.app + README.txt, and YsRecomp.zip)
 #        --verbose                     -> show everything (full build and test output)
 #        --target NAME                 -> build only that target (repeatable; e.g. --target app_tests)
 #        --edition usa|jp|all          -> edition of the game (default all: every edition whose disc and BIOS were
@@ -28,7 +29,7 @@ while [ $# -gt 0 ]; do
         --verbose) VERBOSE=1 ;;
         --target) shift; TARGETS+=("${1:?--target needs a name}") ;;
         --edition) shift; EDITION="${1:?--edition needs usa, jp or all}" ;;
-        -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
         *) echo "Unknown option: $1 (--help)" >&2; exit 2 ;;
     esac
     shift
@@ -100,6 +101,16 @@ if [ -n "$TEST" ]; then
     run_filtered "$summary" ctest "${targs[@]}" || { echo "Tests failed" >&2; exit 1; }
 fi
 if [ "$PACKAGE" = 1 ]; then
-    echo "The macOS package (.app) is not available yet (milestone M3)." >&2
-    exit 1
+    # The package test ("package" group), unless --test-all already ran it; then one package per edition
+    if [ "$TEST" != all ]; then
+        pargs=(--test-dir build -C Release -L package --repeat until-pass:2)
+        [ -n "$EXCLUDED" ] && pargs+=(-LE "^($EXCLUDED)\$")
+        [ "$VERBOSE" = 1 ] && pargs+=(--output-on-failure)
+        run_filtered "$summary" ctest "${pargs[@]}" || { echo "Package test failed" >&2; exit 1; }
+    fi
+    py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python
+    for ed in $EDITIONS; do
+        "$py" tools/package/make_package.py --edition "$ed" build/Release/YsRecomp.app/Contents/MacOS/YsRecomp dist ||
+            { echo "Package assembly failed" >&2; exit 1; }
+    done
 fi

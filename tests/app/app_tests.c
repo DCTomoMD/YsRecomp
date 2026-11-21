@@ -4231,7 +4231,24 @@ static void test_launcher(const char *dir)
 
 /* Test host_paths: the resources are read from the executable's folder; the user's data (ini, saves, sessions) goes
  * where the OS policy says (policy from the platform's CMake file): "exe" = next to the executable (Windows),
- * "pref" = ~/Library/Application Support/<app id>/ (macOS, decision D3). Uses its own app id and removes what it wrote. */
+ * "pref" = ~/Library/Application Support/<app id>/ (macOS, decision D3). Uses its own app id and removes what it wrote.
+ * Then PCE_USER_DIR=work (the tests' override, every OS): the user data goes to work/, created if missing. */
+static void test_paths_override(const char *work)
+{
+    char want[1024];
+    snprintf(want, sizeof(want), "%s/user", work);
+    SDL_RemovePath(want);
+    SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "PCE_USER_DIR", want, true);
+    host_paths_init("YsRecompHostPathsTest");
+    const char *user = host_user_dir();
+    printf("paths: with PCE_USER_DIR, user data %s\n", user);
+    SDL_strlcat(want, "/", sizeof(want));
+    CHECK(strcmp(user, want) == 0, "with PCE_USER_DIR, user data %s, expected %s", user, want);
+    SDL_PathInfo info;
+    CHECK(SDL_GetPathInfo(user, &info) && info.type == SDL_PATHTYPE_DIRECTORY, "%s was not created", user);
+    SDL_UnsetEnvironmentVariable(SDL_GetEnvironment(), "PCE_USER_DIR");
+}
+
 static void test_paths(const char *policy)
 {
     const char *app_id = "YsRecompHostPathsTest";
@@ -4320,8 +4337,10 @@ int main(int argc, char **argv)
     } else if (argc == 3 && strcmp(argv[1], "launcher") == 0) {
         SDL_CreateDirectory(argv[2]);
         test_launcher(argv[2]);
-    } else if (argc == 3 && strcmp(argv[1], "paths") == 0) {
+    } else if (argc == 4 && strcmp(argv[1], "paths") == 0) {
+        SDL_CreateDirectory(argv[3]);
         test_paths(argv[2]);
+        test_paths_override(argv[3]);
     } else if (argc == 2 && strcmp(argv[1], "fade") == 0) {
         test_fade();
     } else if (argc == 2 && strcmp(argv[1], "redraw") == 0) {

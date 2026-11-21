@@ -24,6 +24,8 @@ set(PLATFORM_HOST_SOURCES
 set(PLATFORM_HOST_LIBRARIES dwmapi)
 # Where the user's data goes (test host_paths): next to the executable
 set(PLATFORM_USER_DIR exe)
+# The player package's test (app_package_ys): the .exe, its icon and the folder next to it
+set(PLATFORM_PACKAGE_TEST tools/package/run_package_test.py)
 
 # Generated C (~40 MB in 24 parts)
 function(platform_generated_code target)

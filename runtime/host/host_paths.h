@@ -12,7 +12,7 @@ const char *host_resource_dir(void);
 
 /* Writable user data (ini; saves/, sessions/, menu_font.bin and launcher_sfx.bin follow the ini's folder).
  * Empty or ends with a separator. Next to the executable on Windows; ~/Library/Application Support/<app_id>/ on macOS,
- * created on the first call. */
+ * created on the first call. With PCE_USER_DIR=FOLDER (tests), that folder instead, on every OS. */
 const char *host_user_dir(void);
 
 #endif

@@ -241,7 +241,8 @@ function(ys_edition)
         set_tests_properties(app_launcher_ys PROPERTIES SKIP_RETURN_CODE 77)
         # The player package (only YsRecomp.exe + README.txt, .exe with an icon and not needing the
         # Visual C++ Redistributable) extracted to a temporary folder outside the project reaches the game.
-        add_test(NAME app_package_ys COMMAND ${PYTHON_EXE} "${CMAKE_SOURCE_DIR}/tools/package/run_package_test.py"
+        # (the script per OS: cmake/platform_*.cmake, PLATFORM_PACKAGE_TEST)
+        add_test(NAME app_package_ys COMMAND ${PYTHON_EXE} "${CMAKE_SOURCE_DIR}/${PLATFORM_PACKAGE_TEST}"
             $<TARGET_FILE:YsRecomp> "${YS_DISC_DIR}" "${CMAKE_BINARY_DIR}/app_output/package")
         set_tests_properties(app_package_ys PROPERTIES SKIP_RETURN_CODE 77)
         # The game runs on its own thread; with the window stuck for 2 s (as when dragging

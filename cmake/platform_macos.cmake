@@ -29,6 +29,8 @@ set(PLATFORM_HOST_SOURCES
 set(PLATFORM_HOST_LIBRARIES)
 # Where the user's data goes (test host_paths): ~/Library/Application Support/<app id>/ (decision D3)
 set(PLATFORM_USER_DIR pref)
+# The player package's test (app_package_ys): the .app, its signature and the zip (M3-6)
+set(PLATFORM_PACKAGE_TEST tools/package/run_package_test_macos.py)
 
 # Generated C: at most 4 files compiled at the same time (M3-1: the largest part takes ~2.6 GB and ~2 min with
 # Apple Clang -O3; 4 at a time fits in 24 GB with room for the rest of the build). No warning flags: none came out.

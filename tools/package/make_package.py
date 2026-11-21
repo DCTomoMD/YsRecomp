@@ -6,13 +6,23 @@ are created next to the .exe the first time the player runs it). Before building
   - does not need the "Visual C++ Redistributable" (does not import VCRUNTIME140.dll or api-ms-win-crt-*);
   - has the icon (runtime/host/win/ysrecomp.ico) embedded.
 
+macOS (M3-6): FOLDER/YsRecomp/ with YsRecomp.app + README.txt (from package/README-macOS.txt), and FOLDER/YsRecomp.zip
+made with ditto (keeps the executable bit and the app's signature). The executable given is the one inside the app
+(YsRecomp.app/Contents/MacOS/YsRecomp, CMake's $<TARGET_FILE>). Before building, checks that the app's signature is
+valid (codesign) and that it has its icon and launcher images. The player's settings and saves live in
+~/Library/Application Support/YsRecomp/, never in the package folder, so the folder is made anew each time; the files
+the program makes from the disc (menu_font.bin, launcher_sfx.bin) are not shipped (the program makes them on the
+first start).
+
 Usage: make_package.py [--edition usa] YsRecomp.exe OUTPUT_FOLDER
+       make_package.py [--edition usa] YsRecomp.app/Contents/MacOS/YsRecomp OUTPUT_FOLDER   (macOS)
        (--edition: only usa until Phase 3B; the folder, .exe, .zip and .ini names come from the edition's executable
        name, tools/editions.py)
 """
 import argparse
 import os
 import shutil
+import subprocess
 import sys
 import zipfile
 
@@ -21,6 +31,8 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import editions  # noqa: E402
 
 README = os.path.join(ROOT, "package", "README.txt")
+README_MACOS = os.path.join(ROOT, "package", "README-macOS.txt")
+MACOS = sys.platform == "darwin"
 ICON = os.path.join(ROOT, "runtime", "host", "win", "ysrecomp.ico")
 EXE = editions.get(editions.DEFAULT).exe  # YsRecomp
 FILES = (f"{EXE}.exe", "README.txt")
@@ -52,9 +64,61 @@ def check_exe(exe):
     return problems
 
 
+def app_bundle(exe):
+    """macOS: the .app that holds the executable (APP/Contents/MacOS/NAME), or None."""
+    macos = os.path.dirname(os.path.abspath(exe))
+    app = os.path.dirname(os.path.dirname(macos))
+    if os.path.basename(macos) == "MacOS" and app.endswith(".app"):
+        return app
+    return None
+
+
+def check_app(app):
+    """List of problems with the .app (empty = ready for the package)."""
+    problems = []
+    r = subprocess.run(["codesign", "--verify", "--strict", app], capture_output=True, text=True)
+    if r.returncode != 0:
+        problems.append(f"the app's signature is not valid: {r.stderr.strip()}")
+    res = os.path.join(app, "Contents", "Resources")
+    if not os.path.isfile(os.path.join(res, f"{EXE}.icns")):
+        problems.append(f"the app has no icon ({EXE}.icns)")
+    for name in launcher_images():
+        if not os.path.isfile(os.path.join(res, "launcher", name)):
+            problems.append(f"the app has no launcher image {name}")
+    return problems
+
+
+def make_macos(exe, out):
+    """The macOS package (see the top of this file)."""
+    app = app_bundle(exe)
+    if not app:
+        print(f"ERROR: {exe} is not inside a .app (expected NAME.app/Contents/MacOS/NAME)")
+        return None
+    problems = check_app(app)
+    if problems:
+        for p in problems:
+            print(f"ERROR: {p}")
+        return None
+    folder = os.path.join(out, EXE)
+    shutil.rmtree(folder, ignore_errors=True)
+    os.makedirs(folder)
+    # ditto copies the bundle as it is (signature, executable bit, symbolic links)
+    subprocess.run(["ditto", app, os.path.join(folder, f"{EXE}.app")], check=True)
+    shutil.copy2(README_MACOS, os.path.join(folder, "README.txt"))
+    zip_path = os.path.join(out, f"{EXE}.zip")
+    if os.path.exists(zip_path):
+        os.remove(zip_path)
+    # --norsrc --noextattr: no resource forks or extended attributes (download marks, Finder data) in the zip; the
+    # signature is in the bundle's files (Contents/_CodeSignature), so it goes along
+    subprocess.run(["ditto", "-c", "-k", "--norsrc", "--noextattr", "--keepParent", folder, zip_path], check=True)
+    return folder, zip_path
+
+
 def make(exe, out, edition=editions.DEFAULT):
     if editions.get(edition).exe != EXE:  # the names below are the USA edition's (Phase 3B: per edition)
         raise SystemExit(f"make_package: no package for edition {edition} yet")
+    if MACOS:
+        return make_macos(exe, out)
     problems = check_exe(exe)
     if problems:
         for p in problems:
