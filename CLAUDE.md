@@ -275,14 +275,20 @@ roms/ 直下に北米版の cue と bin 43 本、System Card (USA) v2.0 を上�
 - 試験の期待値（PASS_REGULAR_EXPRESSION、セッション、カバレッジ）は北米版専用。日本版には使えない。
 
 ### macOS
-- M3 の途中（M3-6 まで）：北米版のゲーム本体（生成 C、`ys_trace`、`YsRecomp.app`、パッケージ）は macOS でビルドでき、
-  history 以外の試験は `reference/` がないもの（skip 7 本、`cpu_huc6280`）を除いて合格している。`app_prep_ys` はまれに
-  失敗する（M3-5-1、原因は未特定）。詳細とまとめ：review_portability/10_m3_plan.md の 8〜13 章（M3-8 で書き直す）。
+- M3 の途中（M3-7 まで）：北米版のゲーム本体（生成 C、`ys_trace`、`YsRecomp.app`、パッケージ）は macOS でビルドでき、
+  `reference/` を入れて（M3-7）、history 以外の試験は skip 1 本（`perf_ys`：最適化の前の基準 `build/perf_ref/hle` がない。
+  Windows でも同じ）を除いて合格している。`app_prep_ys` はまれに失敗する（M3-5-1、原因は未特定）。
+  詳細とまとめ：review_portability/10_m3_plan.md の 8〜15 章（M3-8 で書き直す）。
 - 手順：`scripts/build.sh`（build.ps1 と同じ手順。`--test` / `--test-all` / `--test-hist` / `--verbose` /
   `--target NAME`。`--package` は `dist/` に `YsRecomp.app` と zip を作る（M3-6））。生成器は Ninja Multi-Config で、実行ファイルは Windows と同じ
   `build/Release/` に出る（拡張子なし。ツールは `tools/build_paths.py` で名前を決める）。Python は `.venv/bin/python`。
     scripts/build.sh --target pce_app --target app_tests
     ctest --test-dir build -C Release -R '^(app_config|app_volume|host_layers)$'
+- Geargrafx との比較（M3-7）：`external/PCERecomp/reference/` に Geargrafx のタグ `1.8.6`（`3d6345c`。`1.8.7` 以降は
+  PCERecomp のソースの一覧に `load_detector.cpp` がなくリンクできない）、HuC6280 の試験 `4ce378e`、Mednafen 1.32.1 の
+  3 ファイルを置く（取り方：PCERecomp の `docs/hardware/INDEX.md`。Geargrafx は `--branch 1.8.6`）。`gg_trace`・
+  `gg_cdinfo` は `external/PCERecomp/tools/reference_trace/build.sh` で 1 回作る（Windows は `build.ps1`。MSVC 以外は
+  `-ffp-contract=off` が必須で、CMake が付ける。ないと音の比較が失敗する）。詳細：review_portability/10_m3_plan.md の 15 章。
 - M2 の時点で macOS で確かめたもの：`pce_trace`・`bios_check` のビルド、ROM が必要な `app_disc_id`・`app_cd_menu_music`・
   `recomp_disc_ys`・`bios_c_ys` の合格（review_portability/09_m2_rom_paths_editions.md）。ROM が見つかると生成 C の
   ターゲットも定義されるので、M3 までは `--target` で必要なものだけをビルドする（引数なしの `scripts/build.sh` は生成 C の

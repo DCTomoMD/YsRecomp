@@ -675,5 +675,124 @@ python -c "import zipfile;[print(i.filename,i.file_size) for i in zipfile.ZipFil
 - `git status --short`：追跡しているファイルの変更はない（`.ico` は書き直されていない）。` M external/PCERecomp` が出た。
   サブモジュールが記録の `728e91b` でなく、前の `2e86f2c` のままと考えられる（ASSUMPTION。今回の手順に
   `git submodule update` を入れていなかった）。`2e86f2c` と `728e91b` の差は `pce_trace.c` の 1 行（printf のキャスト）
-  だけで、`YsRecomp.exe` には入らないので、P1〜P3 の結果は変わらない。サブモジュールの位置は、ユーザーの確認待ち。
+  だけで、`YsRecomp.exe` には入らないので、P1〜P3 の結果は変わらない。
+- サブモジュールの確認（ユーザーが実行）：`git submodule status` は `+2e86f2c... external/PCERecomp` で、推測どおり前の
+  位置だった（CONFIRMED）。`git -C external/PCERecomp status --short` は何も出さない（サブモジュールの中の変更はない）。
+  `git submodule sync; git submodule update` で `728e91b` に移った。
 - `??` の `*.txt` は M2・M3 の確認で作ったログ（コミットしない）。
+
+## 15. M3-7 の計画（Geargrafx との比較）
+
+### 15.1 調べたこと（2026-11-22、macOS）
+
+**`reference/` の取得**（Q2 の承認による。`external/PCERecomp/reference/`。PCERecomp の `.gitignore` で Git の管理外）：
+
+| もの | 取ったもの | 大きさ |
+|---|---|---|
+| Geargrafx | `https://github.com/drhelius/Geargrafx.git` のタグ `1.8.6`（`3d6345c4f7b8269b3b4eb074c3d804c4c52a7f0c`、2026-10-30）。`--depth 1` で取り、タグ `1.8.3`〜`1.8.9` を足して確かめた | 27 MB |
+| HuC6280 の試験 | `https://github.com/SingleStepTests/huc6280.git` の `4ce378e04e243437e6f74dfe76c3cb7c70e45bf1`（2025-07-06、タグなし）。`v1/` に 256 ファイル | 258 MB |
+| Mednafen 1.32.1 | `mednafen-1.32.1.tar.xz`（SHA-256 `de7eb94ab66212ae7758376524368a8ab208234b33796625ca630547dbc83832`）から `pcecd.cpp`・`pcecd.h`・`scsicd.cpp` の 3 ファイル（INDEX.md の手順のまま） | — |
+
+**Geargrafx の版**（Q2 では「最新のリリースのタグ」としていた）：
+
+- 最新の `1.8.9`（2026-11-21）では、`gg_trace` のリンクが失敗した（`LoadDetector::Init` などが未定義）[C]。
+  `1.8.7` から `src/load_detector.cpp` が加わったが、PCERecomp の `tools/reference_trace/CMakeLists.txt` の
+  ソースの一覧（`GG_CORE_SOURCES`）にないため。
+- `1.8.3`〜`1.8.6` には `load_detector.cpp` がなく、一覧の 37 ファイルがすべてある [C]。一覧にないのは、使われていない
+  `cdrom_drive*`・`cdrom_physical_image`・`media_file_libretro` だけ。
+- 上流の作者が使った Geargrafx のコミットは、どこにも記録がない（PCERecomp は 2026-11-07 に 1 コミットで公開された）。
+  一覧と合う最新の版が `1.8.6` なので、上流が使ったのは `1.8.6` か、その前後の master と考えられる（ASSUMPTION）。
+- いまは `1.8.6` を置いている（Q23 で決める）。
+
+**ビルド**：`gg_trace`・`gg_cdinfo` は PCERecomp の `tools/reference_trace/` にある別の CMake プロジェクト（Windows の
+手順は `build.ps1`。macOS の手順はない）。PCERecomp のファイルを変えずに、次の手で `build/Release/` に作った（`build/` は
+PCERecomp の `.gitignore` で管理外）。
+
+```bash
+cmake -S external/PCERecomp/tools/reference_trace -B external/PCERecomp/tools/reference_trace/build -G "Ninja Multi-Config" \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+  -DCMAKE_C_FLAGS=-ffp-contract=off -DCMAKE_CXX_FLAGS=-ffp-contract=off
+cmake --build external/PCERecomp/tools/reference_trace/build --config Release
+```
+
+- 警告 0、約 11 秒 [C]。
+- **`-ffp-contract=off` は必須** [C]：付けずにビルドした `gg_trace`（スクラッチのフォルダ）で `session_ys_game` を
+  キャッシュなし（`PCE_GG_CACHE=0`）で動かすと、`SOUND different from frame 3400 (56.8 s)` で失敗した。付けたものでは
+  合格する。Apple Clang は既定で積和をまとめる（FMA）ので、Geargrafx の音の浮動小数点の計算が Windows（MSVC）と変わる。
+  私たちのコードに付けているもの（D4、`cmake/platform_macos.cmake`）と同じ理由。
+
+**試験の結果**（macOS、`c16ecde` のビルドのまま）：
+
+| 試験 | 結果 | 中身 |
+|---|---|---|
+| `cpu_huc6280` | 合格 [C] | `256 opcodes tested, 640000 tests, 0 failures`。試験の中で除外する分（`skipped: 13 (TMA #0), 2698 (block overwriting its own source/stack)`）は上流の試験の作りのまま |
+| `trace_ys_boot` | 合格 [C] | `EQUAL: 3000000 instructions` |
+| `trace_ys_run` | 合格 [C] | `EQUAL: 8000000 instructions` |
+| `session_ys_boot` | 合格 [C] | `EQUAL: 1200 frames, image and sound identical to Geargrafx`（解像度が画面の途中で変わる 2 フレームは比べない。上流の作り） |
+| `session_ys_save` | 合格 [C] | `EQUAL: 6600 frames, ...`（同 3 フレーム） |
+| `session_ys_game` | 合格 [C] | `EQUAL: 9000 frames, ...`（同 5 フレーム） |
+| `cd_image` | **skip のまま**（試験として） | PCERecomp の `CMakeLists.txt:114` が `gg_cdinfo.exe` の名前を固定しているので、macOS では「not built」で 77 を返す。同じスクリプトに macOS の `gg_cdinfo` を手で渡すと、合成した CD イメージと北米版のディスク（43 トラック）で `PASSED` [C] |
+| `perf_ys` | skip のまま | `reference/` とは関係がない。`build/perf_ref/hle`（最適化の前に `run_perf_check.py --save` で記録した基準）がないため。Windows でも同じ。9 章の「M3-7 で `reference/` を入れてから」は誤り |
+
+### 15.2 決めていただくこと
+
+| ID | 決めること | 案（推奨） | ほかの案 |
+|---|---|---|---|
+| Q23 | Geargrafx の版 | **`1.8.6` に固定する**（`3d6345c`）。PCERecomp の一覧のままビルドでき、上流が使った版に最も近い。M3-8 で Windows にも同じものを入れる | `1.8.9` にして、PCERecomp の一覧に `load_detector` を足す（PCERecomp の変更が増え、上流の試験が作られたときと違う Geargrafx と比べることになる） |
+| Q24 | PCERecomp の変更（フォーク `DCTomoMD/PCERecomp`、`728e91b` から新しいブランチ `macos-reference-tools`） | **承認する**。中身は 3 つで、どれも Ys に関係しない：① `CMakeLists.txt:114` の `gg_cdinfo.exe` を `gg_cdinfo${CMAKE_EXECUTABLE_SUFFIX}` にする（`cd_image` が macOS で検査できる）。② `tools/reference_trace/CMakeLists.txt` で、MSVC 以外のとき `gg_core` に `-ffp-contract=off` を付ける（付け忘れると音の比較が失敗する。Windows の MSVC のビルドは変わらない）。③ `tools/reference_trace/build.sh` を足す（`build.ps1` の macOS 版。Ninja Multi-Config、arm64、macOS 13） | 変えない：`cd_image` は macOS で skip のまま、`-ffp-contract=off` は手順に書くだけ（忘れると失敗する） |
+| Q25 | macOS で `gg_trace` をビルドする手順 | **Windows と同じく手で 1 回**：`external/PCERecomp/tools/reference_trace/build.sh`（Q24 の ③）。YsRecomp の `scripts/build.sh` には入れない（Windows の `build.ps1` も入れていない）。CLAUDE.md の macOS の節に書く | `scripts/build.sh --reference` を足す |
+| Q26 | `perf_ys` | **skip のまま**。最適化の前の基準は今からは作れない（今 `--save` で作ると、今と今を比べるだけになる）。9 章の誤りを直して記録する | 今の状態を基準として記録する（これからの変更の検査にはなる） |
+
+- Q24 を承認いただいたら：フォークのブランチで 3 つを変え、YsRecomp のサブモジュールをそのコミットに進め、`gg_trace` を
+  `build.sh` で作り直して、`console` ラベルの試験と `cpu_huc6280`、history 以外の全試験を動かす。
+- Windows（M3-8）：`reference/` に同じ Geargrafx `1.8.6` と HuC6280 の試験 `4ce378e` を入れ、`build.ps1` で `gg_trace` を
+  作って、skip が 1 本（`perf_ys`）になることを確かめる。
+
+**2026-11-22：ユーザーの回答。Q23 は「BGM のノイズ（Windows 版のほうが多い）の原因が Geargrafx の版なら `1.8.9`、無関係なら
+推奨」、Q24〜Q26 は推奨。** Geargrafx は YsRecomp の本体に入っていない（本体の CMake は `tools/reference_trace` を参照せず、
+`YsRecomp` の実行ファイルに Geargrafx の記号は 0 件 [C]。使うのは試験の道具の `gg_trace`・`gg_cdinfo` だけ）。そのため
+Geargrafx の版はノイズと無関係で、**Q23 は推奨の `1.8.6`** に決定。
+
+### 15.3 M3-7 で直したこと
+
+PCERecomp（フォーク `DCTomoMD/PCERecomp`、`728e91b` から新しいブランチ `macos-reference-tools`。Q24）：
+
+| ファイル | 変更 |
+|---|---|
+| `CMakeLists.txt`（114 行目） | `cd_image` に渡す名前を `gg_cdinfo.exe` から `gg_cdinfo${CMAKE_EXECUTABLE_SUFFIX}` に（Windows は今と同じ `.exe`） |
+| `tools/reference_trace/CMakeLists.txt` | MSVC 以外のとき `gg_core` に `-ffp-contract=off`（PUBLIC。`gg_trace`・`gg_cdinfo` にも付く）。先頭のコメントに `build.sh` を追記。MSVC の分岐は変えていない |
+| `tools/reference_trace/build.sh`（新規、実行権限付き） | `build.ps1` の macOS・Linux 版：初回だけ Ninja Multi-Config で構成し、`--config Release --parallel` でビルド。アーキテクチャや macOS の版は指定しない（試験の道具で、配らない。YsRecomp の決定 D9・H5 を PCERecomp に持ち込まない） |
+
+YsRecomp：`CLAUDE.md` の macOS の節（Q25：`reference/` の版と `build.sh`、試験の状況）、この文書。
+
+- Ys に関係するものは PCERecomp に入れていない（上流の規則）。
+
+### 15.4 macOS で確かめたこと
+
+- `tools/reference_trace/build/` を消して `build.sh` で作り直した：警告 0。Release のコンパイル 50 か所すべてに
+  `-ffp-contract=off` が付いた（付いていないのはリンクの 2 か所だけ）[C]。
+- `scripts/build.sh`（構成し直し）：`Built.`。試験は 100 本のまま。
+- `console` ラベル 17 本（`-j 4`）：**17 本すべて合格**（153 秒）。`cd_image` が初めて試験として合格した（skip ではない）[C]。
+- キャッシュなし（`PCE_GG_CACHE=0`）で `session_ys_game`（`EQUAL: 9000 frames, image and sound identical to Geargrafx`）、
+  `cpu_huc6280`（`640000 tests, 0 failures`）、`cd_image`（`PASSED`）が合格 [C]。
+- history 以外の全試験（`-j 4 --repeat until-pass:2`）：**90 本のうち 89 本合格、skip 1 本（`perf_ys`）、失敗 0**
+  （1112 秒）[C]。再実行で合格したものはない（`***Failed` の行がない）。`app_prep_ys` も 1 回目で合格。
+  M3-6 までの「skip 7 本・`cpu_huc6280` の失敗」が「skip 1 本（`perf_ys`、Q26）」になった。
+
+### 15.5 Windows で確かめること（M3-8 で全体の確認と一緒に）
+
+- `reference/` に同じものを入れる：Geargrafx `git clone --depth 1 --branch 1.8.6`（`3d6345c` を確かめる）、HuC6280 の試験
+  （`4ce378e` を確かめる）、Mednafen の 3 ファイル。`tools\reference_trace\build.ps1` で `gg_trace.exe`・`gg_cdinfo.exe` を作る。
+- サブモジュールを `macos-reference-tools` のコミットにして、history 以外の全試験：skip が `perf_ys` の 1 本だけ、失敗 0。
+  `cd_image` が `.exe` の名前のまま合格する（`${CMAKE_EXECUTABLE_SUFFIX}` が Windows で `.exe` になる）。
+
+### 15.6 BGM の音質の差（ユーザーの報告、M3-7 とは別の件）
+
+- 報告：Windows 版のほうが BGM のノイズが多い。
+- Geargrafx とは無関係（上の回答のとおり）[C]。
+- 分かっていること [C]：音は両方とも同じコード（`runtime/main.c:2744`）で、44100 Hz・16 ビット・ステレオで SDL3 に渡している。
+  その先の、装置の形式への変換（例：48000 Hz）は SDL3 と OS が行う。浮動小数点の計算は両方とも積和をまとめない（D4）。
+- 原因は UNKNOWN。考えられるもの（どれも ASSUMPTION）：① `YsRecomp.ini` の設定の違い（`chip_filter`、音量など。Windows と
+  Mac で別の .ini を使っている）。② プログラムが出した後の経路（SDL3 の変換、Windows の音の仕組み、音の装置やスピーカー）。
+- 切り分けの案：両方で同じ .ini と同じセッションを `--audio-wav` で記録し、WAV が同じかを比べる（同じなら ②、違えば
+  プログラムの中）。まず Windows と Mac の .ini の音の設定を比べる。実施はユーザーの指示があってから。
