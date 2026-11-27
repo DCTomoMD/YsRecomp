@@ -28,9 +28,12 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 
 # User's disc and BIOS (roms/, outside Git), per edition: -DYS_USA_CUE=... -DYS_USA_BIOS=... pick the files; left
 # empty, roms/<upstream name> and then roms/usa/ (disc) or roms/bios/ (BIOS) (cmake/ys_edition.cmake, ys_rom_file).
+# JP edition: -DYS_JP_CUE=... -DYS_JP_BIOS=... (System Card 3.0); left empty, roms/jp/ and roms/bios/ only.
 include(cmake/ys_edition.cmake)
 ys_rom_file(YS_USA_CUE "Ys Book I & II (USA).cue" usa "USA disc (.cue)")
 ys_rom_file(YS_USA_BIOS "[BIOS] TurboGrafx CD System Card (USA) (v2.0).pce" bios "USA System Card 2.0 (.pce)")
+ys_rom_file(YS_JP_CUE "Ys I & II (Japan).cue" jp "Japan disc (.cue)" SUBFOLDER_ONLY)
+ys_rom_file(YS_JP_BIOS "syscard3.pce" bios "Japan System Card 3.0 (.pce)" SUBFOLDER_ONLY)
 
 # PCERecomp (the emulated console and the tools): the working copy next to this folder (..\PCERecomp) when it
 # exists (development of both projects side by side), otherwise the submodule in external/PCERecomp (a clone made
@@ -175,8 +178,13 @@ endif()
 
 
 # Everything that belongs to one edition of the game (disc map, generated C, YsRecomp, ys_trace and the tests on
-# its disc): cmake/ys_edition.cmake. Only the USA edition until Phase 3B (review_jp/02_build_layout.md, chapter 2).
+# its disc): cmake/ys_edition.cmake (review_jp/02_build_layout.md, chapter 2).
 ys_edition(ID usa CUE "${YS_USA_CUE}" BIOS "${YS_USA_BIOS}" GAME_DIR "${CMAKE_SOURCE_DIR}/games/ys")
+# JP edition (Phase 3B-1): no disc map yet, so only its boot smoke test jp_boot_ysjp (System Card 3.0, a new game
+# started). $2C40 = the JP disc's gold (review_jp/03_disc_analysis.md, 6.2), 1000 in a new game
+# (review_jp/04_phase3b_plan.md, chapter 9): values read from the JP disc, not the USA edition's.
+ys_edition(ID jp CUE "${YS_JP_CUE}" BIOS "${YS_JP_BIOS}" GAME_DIR "${CMAKE_SOURCE_DIR}/games/ys_jp" SUFFIX _ysjp
+    BOOT_INPUT "${CMAKE_SOURCE_DIR}/tests/input/ys_jp_boot.txt" BOOT_FRAMES 6000 BOOT_RAM16 0x2C40=1000)
 
 # ---- Test groups (LABELS) ----
 # quick:    ~20 s; run on every change (.\build.ps1 -Test)
@@ -192,7 +200,7 @@ set(TESTS_QUICK app_config app_volume app_menu app_video app_image app_crop
     app_mark_ys host_layers host_paths)
 set(TESTS_CONSOLE trace_ys_boot trace_ys_run session_ys_boot session_ys_game session_ys_save fade_ys
     coverage_ys bios_c_ys hle_timing_ys nobios_cabin_ys equip_preview_ys equip_ice_preview_ys game_windows_ys windows_ys1 windows_crop_ys
-    panel_ys)
+    panel_ys jp_boot_ysjp)
 set(TESTS_RECOMP recomp_disc_ys recomp_lockstep_ys recomp_lockstep_ys_nobios dialog_ys app_menu_ys app_intro_ys app_menu_intro_ys perf_ys torn_window_ys save_window_ring_ys hud_save_ys hud_save_ys2
     app_crop_ys app_torn_window_ys app_load_no_border_ys layout_switches_ys app_rhythm_sewer_ys rhythm_cave_ys equipment_ys actors_ys actors_ys1 motion_fast_ys
     motion_cave_fast_ys gpu_roof_ys motion_edge_ys gpu_behind_roof_ys masks_mine_ys masks_window_ys light_window_ys zoom_save_ys zoom_gameover_ys app_ring_list_ys

@@ -8,9 +8,9 @@
 #                                         in dist/ (YsRecomp/ with YsRecomp.app + README.txt, and YsRecomp.zip)
 #        --verbose                     -> show everything (full build and test output)
 #        --target NAME                 -> build only that target (repeatable; e.g. --target app_tests)
-#        --edition usa|jp|all          -> edition of the game (default all: every edition whose disc and BIOS were
-#                                         found, today only usa); the other editions' tests are left out (common
-#                                         tests always run). jp: Phase 3B. As build.ps1 -Edition
+#        --edition usa|jp|all          -> edition of the game (default all); the other editions' tests are left out
+#                                         (common tests always run). jp: only its boot test so far, no package
+#                                         (--package --edition jp stops; with all, usa only). As build.ps1 -Edition
 # Without --verbose, only build warnings and errors and the test summary are shown. To see a failed test's output:
 #   ctest --test-dir build -C Release -R <name> --output-on-failure
 # Generator: Ninja Multi-Config, so the executables go to build/Release/ as on Windows (tools/build_paths.py).
@@ -35,18 +35,25 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-# Editions (tools/editions.py; the ctest label of each one's tests). jp comes in Phase 3B.
-AVAILABLE="usa"; PLANNED="jp"
+# Editions (tools/editions.py; the ctest label of each one's tests). PACKAGED: the ones with a player to package
+# (jp: later steps of Phase 3B).
+AVAILABLE="usa jp"; PACKAGED="usa"
 case "$EDITION" in
     all) EDITIONS="$AVAILABLE" ;;
-    usa) EDITIONS="$EDITION" ;;
-    jp) echo "Edition 'jp' is not available yet (Phase 3B)" >&2; exit 2 ;;
+    usa|jp) EDITIONS="$EDITION" ;;
     *) echo "Unknown edition: $EDITION (usa, jp or all)" >&2; exit 2 ;;
 esac
 EXCLUDED=""
-for e in $AVAILABLE $PLANNED; do
+for e in $AVAILABLE; do
     case " $EDITIONS " in *" $e "*) ;; *) EXCLUDED="${EXCLUDED:+$EXCLUDED|}$e" ;; esac
 done
+PACKAGES=""
+for e in $EDITIONS; do
+    case " $PACKAGED " in *" $e "*) PACKAGES="${PACKAGES:+$PACKAGES }$e" ;; esac
+done
+if [ "$PACKAGE" = 1 ] && [ -z "$PACKAGES" ]; then
+    echo "Edition '$EDITION' has no player package yet (Phase 3B)" >&2; exit 2
+fi
 
 cd "$(dirname "$0")/.."
 command -v cmake >/dev/null || { echo "cmake not found in PATH" >&2; exit 1; }
@@ -109,7 +116,7 @@ if [ "$PACKAGE" = 1 ]; then
         run_filtered "$summary" ctest "${pargs[@]}" || { echo "Package test failed" >&2; exit 1; }
     fi
     py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python
-    for ed in $EDITIONS; do
+    for ed in $PACKAGES; do
         "$py" tools/package/make_package.py --edition "$ed" build/Release/YsRecomp.app/Contents/MacOS/YsRecomp dist ||
             { echo "Package assembly failed" >&2; exit 1; }
     done

@@ -10,9 +10,10 @@
 #        -Verbose               -> show everything (full build and test output)
 #        -VsPath FOLDER         -> another Visual Studio 2022 installation (the CI's Enterprise, found with
 #                                  vswhere); without it, the Build Tools in their usual folder
-#        -Edition usa|jp|all    -> edition of the game (default all: every edition whose disc and BIOS were found,
-#                                  today only usa). The tests of the other editions are left out (common tests
-#                                  always run); -Package builds the chosen editions' packages. jp: Phase 3B.
+#        -Edition usa|jp|all    -> edition of the game (default all). The tests of the other editions are left out
+#                                  (common tests always run); -Package builds the chosen editions' packages.
+#                                  jp: only its boot test so far, no package (-Package -Edition jp stops; with
+#                                  all, usa only).
 #                                  Which editions exist depends only on the disc and BIOS (YS_USA_CUE, YS_USA_BIOS;
 #                                  cmake/ys_edition.cmake), not on this option.
 # Without -Verbose, only build warnings and errors and the test summary (how many passed and which
@@ -23,14 +24,15 @@ param([switch]$Test, [switch]$TestAll, [switch]$TestHist, [switch]$Package, [swi
       [ValidateSet('usa', 'jp', 'all')][string]$Edition = 'all')
 $ErrorActionPreference = 'Stop'
 
-# Editions (tools/editions.py; the ctest label of each one's tests). jp comes in Phase 3B.
-$available = @('usa')
-$planned = @('jp')
-if ($Edition -eq 'all') { $editions = $available }
-elseif ($available -contains $Edition) { $editions = @($Edition) }
-else { throw "Edition '$Edition' is not available yet (Phase 3B)" }
+# Editions (tools/editions.py; the ctest label of each one's tests). $packaged: the ones with a player to package
+# (jp: later steps of Phase 3B).
+$available = @('usa', 'jp')
+$packaged = @('usa')
+if ($Edition -eq 'all') { $editions = $available } else { $editions = @($Edition) }
 # Labels left out of the tests: the editions not chosen
-$excluded = @(($available + $planned) | Where-Object { $editions -notcontains $_ })
+$excluded = @($available | Where-Object { $editions -notcontains $_ })
+$packages = @($editions | Where-Object { $packaged -contains $_ })
+if ($Package -and $packages.Count -eq 0) { throw "Edition '$Edition' has no player package yet (Phase 3B)" }
 
 $vs = $VsPath
 $cmake = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
@@ -82,7 +84,7 @@ if ($Package) {
         if ($rc -ne 0) { throw 'Package test failed' }
     }
     # One package per edition (the executable's name per edition comes in Phase 3B; usa: YsRecomp.exe)
-    foreach ($ed in $editions) {
+    foreach ($ed in $packages) {
         & python tools\package\make_package.py --edition $ed build\Release\YsRecomp.exe dist
         if ($LASTEXITCODE -ne 0) { throw 'Package assembly failed' }
     }

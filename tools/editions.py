@@ -1,8 +1,12 @@
-"""Editions of the game (USA; JP from Phase 3B) for the YsRecomp scripts: names, folders, disc and BIOS.
+"""Editions of the game (USA, JP) for the YsRecomp scripts: names, folders, disc and BIOS.
 
 The disc and the BIOS follow the same rule as CMake (cmake/ys_edition.cmake, ys_rom_file): the cache variable
 (YS_USA_CUE, YS_USA_BIOS in build/CMakeCache.txt) when it was given, otherwise roms/<upstream name> and then
-roms/usa/ (disc) or roms/bios/ (BIOS).
+roms/usa/ (disc) or roms/bios/ (BIOS). The JP edition (YS_JP_CUE, YS_JP_BIOS) has no upstream place: roms/jp/ and
+roms/bios/ only.
+
+JP (Phase 3B-1): the edition is known here, but its player, trace tools, disc map and sessions do not exist yet
+(later steps of Phase 3B and 3C); a tool asked for it says what is missing.
 
 Recorded sessions write the disc and the BIOS as the recording machine saw them (`# game: roms\\...cue`,
 `# game: D:\\Roms\\...\\...cue`). header_path() turns a header value into a path on this machine without changing the
@@ -22,7 +26,7 @@ from dataclasses import dataclass
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CMAKE_CACHE = os.path.join(ROOT, "build", "CMakeCache.txt")
 DEFAULT = "usa"
-PLANNED = ("jp",)  # Phase 3B
+PLANNED = ()  # editions announced but not available yet (none today)
 
 
 @dataclass(frozen=True)
@@ -38,16 +42,17 @@ class Edition:
     bios_var: str
     bios_name: str
     bios_subdir: str
+    upstream_place: bool = True  # roms/<file> (upstream's place) is looked at before roms/<subfolder>/<file>
 
     @property
     def sessions_dir(self):
         return os.path.join(self.game_dir, "sessions")
 
     def cue(self):
-        return rom_file(self.cue_var, self.cue_name, self.cue_subdir)
+        return rom_file(self.cue_var, self.cue_name, self.cue_subdir, self.upstream_place)
 
     def bios(self):
-        return rom_file(self.bios_var, self.bios_name, self.bios_subdir)
+        return rom_file(self.bios_var, self.bios_name, self.bios_subdir, self.upstream_place)
 
 
 EDITIONS = {
@@ -56,6 +61,11 @@ EDITIONS = {
                    cue_var="YS_USA_CUE", cue_name="Ys Book I & II (USA).cue", cue_subdir="usa",
                    bios_var="YS_USA_BIOS", bios_name="[BIOS] TurboGrafx CD System Card (USA) (v2.0).pce",
                    bios_subdir="bios"),
+    # Names of review_jp/02_build_layout.md, 2.2; files of review_jp/04_phase3b_plan.md, Q3
+    "jp": Edition(id="jp", exe="YsIandII_JP", trace="ys_trace_jp", ptrace="pce_trace_jp",
+                  game_dir=os.path.join(ROOT, "games", "ys_jp"),
+                  cue_var="YS_JP_CUE", cue_name="Ys I & II (Japan).cue", cue_subdir="jp",
+                  bios_var="YS_JP_BIOS", bios_name="syscard3.pce", bios_subdir="bios", upstream_place=False),
 }
 
 
@@ -65,7 +75,7 @@ def get(edition_id):
     if ed:
         return ed
     if edition_id in PLANNED:
-        print(f"edition '{edition_id}' is not available yet (Phase 3B); available: {', '.join(EDITIONS)}",
+        print(f"edition '{edition_id}' is not available yet; available: {', '.join(EDITIONS)}",
               file=sys.stderr)
     else:
         print(f"unknown edition '{edition_id}'; available: {', '.join(EDITIONS)}", file=sys.stderr)
@@ -90,13 +100,15 @@ def cmake_cache_value(name, cache=CMAKE_CACHE):
     return ""
 
 
-def rom_file(var, file_name, subdir):
+def rom_file(var, file_name, subdir, upstream_place=True):
     """The disc or BIOS file chosen like CMake does (it may not exist)."""
     given = cmake_cache_value(var)
     if given:
         return given
     upstream = os.path.join(ROOT, "roms", file_name)
     sub = os.path.join(ROOT, "roms", subdir, file_name)
+    if not upstream_place:
+        return sub
     if not os.path.exists(upstream) and os.path.exists(sub):
         return sub
     return upstream

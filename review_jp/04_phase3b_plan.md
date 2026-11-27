@@ -172,3 +172,138 @@ build/Release/pce_trace --frame --input tests/input/ys_game.txt --bios roms/bios
 - ボタンの台本：`tests/input/ys_game.txt` はボタンだけの北米版のファイルなので、日本版用に同じ中身の
   `tests/input/ys_jp_boot.txt`（案）を作り、日本版で確かめたことをコメントに書く
 - ROM がないときは 77（skip）。ラベル `jp`、`console`
+
+---
+
+## 10. 3B-1 の結果（2026-11-28、macOS arm64）：CMake とツールの受け皿
+
+before（基準）は `8a1033d`。PCERecomp（`external/PCERecomp`、`76ab827`）は変更していない。roms/ は読み取りのみ。
+表記：[C] macOS で実行して確かめた、[W] Windows の実機での確認待ち、[A] 推測。
+
+### 10.1 変更の内容
+
+| ファイル | 変更 |
+|---|---|
+| `CMakeLists.txt` | `ys_rom_file(YS_JP_CUE "Ys I & II (Japan).cue" jp … SUBFOLDER_ONLY)`、`ys_rom_file(YS_JP_BIOS "syscard3.pce" bios … SUBFOLDER_ONLY)`（Q3）。`ys_edition(ID jp … GAME_DIR games/ys_jp SUFFIX _ysjp BOOT_INPUT tests/input/ys_jp_boot.txt BOOT_FRAMES 6000 BOOT_RAM16 0x2C40=1000)`。`TESTS_CONSOLE` に `jp_boot_ysjp` |
+| `cmake/ys_edition.cmake` | `ys_rom_file` に任意の引数 `SUBFOLDER_ONLY`（`roms/<フォルダ>/` だけを見る。北米版の呼び出しと表示は同じ）。`ys_edition` に `SUFFIX`・`BOOT_INPUT`・`BOOT_FRAMES`・`BOOT_RAM16`。`BOOT_INPUT` があれば煙試験 `<ID>_boot<SUFFIX>` を定義する。`GAME_DIR/disc.toml` がない版は、そこでラベルを付けて終わる（生成 C、実行ファイル、ほかの試験は定義されない）。ラベルを付ける部分は小さな関数 `ys_edition_label` にした（2 か所から呼ぶため）。`usa` 以外で `disc.toml` があると構成エラー（その下のターゲット名・試験名がまだ北米版のものなので。名前の引数化は 3B-3 以降）。北米版の本体（旧 48 行目より下）は 1 行も変えていない |
+| `tools/trace/run_boot_test.py`（新規） | 煙試験。`pce_trace --frame --input <台本> --bios <BIOS> <cue> <フレーム> <画像> --dump-state <状態>` を動かし、(1) 終了コード 0 で `FAILED` の行がない、(2) `disc music played` が 0 秒より長い、(3) `--ram16 番地=値` ごとに、最後の状態の作業 RAM の 16 ビットの値が合う、を確かめる。ディスクか BIOS がなければ 77。画像は書くが判定に使わない（K5）。版を知らない（番地と値は呼び出す側が渡す） |
+| `tests/input/ys_jp_boot.txt`（新規） | ボタンだけの台本（`ys_game.txt` と同じ押し方。`diff` で同じことを確かめた）。日本版で確かめたことをコメントに書いた（9 章） |
+| `tools/editions.py` | `jp` を足した：`YsIandII_JP`・`ys_trace_jp`・`pce_trace_jp`・`games/ys_jp`（`02` の 2.2 の名前）、`YS_JP_CUE`・`YS_JP_BIOS`。`upstream_place=False`（CMake の `SUBFOLDER_ONLY` と同じ規則）。`PLANNED` は空にした |
+| `build.ps1`、`scripts/build.sh` | `jp` を選べる（`available` に `jp`）。パッケージを作れる版は別の一覧（`packaged` = `usa`）：`-Package -Edition jp` は `Edition 'jp' has no player package yet (Phase 3B)` で止まり、`all` は北米版だけを作る |
+| `CLAUDE.md` | 「roms/ の配置」と macOS の節の版の説明 |
+
+決めたこと（質問せずに、文書の案のとおりにしたもの）：
+
+- 煙試験の合格の条件は 9 章の案の 3 つ。GOLD の番地 `$2C40`（`03` の 6.2、[C]）と値 1000（9 章、[C]）は CMake の
+  `ys_edition(ID jp …)` の引数に置いた。`profile_jp.c` はまだなく（3B-2）、3B では `reward` が NULL なので、試験の値の置き場は
+  ここだけ。北米版の番地（`$2C41`）は使っていない。
+- 煙試験は北米版と同じ `pce_trace` を使う（`ys_profile_usa` がリンクされている）。Ys のオプションを付けないので、拡張は
+  エンジンのフックを入れない（`ys_trace_ext.c` の `ys_setup`：`on_instruction` を入れるのはオプションがあるときだけ [C]）。
+  北米版の profile の値は読まれない。`pce_trace_jp` は profile ができてから（3B-2 以降）。
+- ツール（`run_bios_check`・`check_all_sessions`・`run_perf_check`・`check_session`・`make_package`）は `--edition jp` を
+  受け付けるが、日本版のセッション・実行ファイルがまだないので、ないものを言って終わる（10.3）。
+
+### 10.2 北米版の試験の定義が前と同じこと（macOS、[C]）
+
+M2（`review_portability/09` の 3 章）と同じく、CMake が書き出した `CTestTestfile.cmake` を比べた。今回は同じフォルダで
+構成し直したので、そろえたのは CMake の行番号（`_BACKTRACE_TRIPLES`）だけ（別のフォルダで構成した場合は、ビルドのフォルダも）。
+
+| 構成 | before（`8a1033d`） | after | 差 |
+|---|---|---|---|
+| 北米版あり・日本版あり（開発機の `build/`） | 100 本 | 101 本 | 増えたのは `jp_boot_ysjp` だけ。before にだけある行 0。after にだけある 12 行は、すべて `jp_boot_ysjp` の `add_test`・`set_tests_properties` と、それを囲む `if`〜`endif` |
+| 北米版あり・日本版なし（`-DYS_JP_CUE=/nonexistent/…`） | 100 本 | 101 本 | 同じ（`jp_boot_ysjp` は定義され、実行すると 77） |
+| 北米版なし・日本版あり（`-DYS_USA_CUE=/nonexistent/…`） | 33 本 | 34 本 | 同じ |
+| 両方なし | 33 本 | 34 本 | 同じ |
+
+- **北米版と共通の 100 本は、名前・順番・コマンド・属性（SKIP_RETURN_CODE、PASS/FAIL_REGULAR_EXPRESSION、TIMEOUT、
+  RUN_SERIAL、ENVIRONMENT、ラベル）が 1 行も変わっていない。**
+- ラベルの本数：`usa` 81、`jp` 1、`quick` 22、`console` 17 → 18、`recomp` 49、`history` 10、`package` 2。
+- 構成の表示：`YS_JP_CUE: …/roms/jp/Ys I & II (Japan).cue (SHA-1 bdb25f76…)`、`YS_JP_BIOS: …/roms/bios/syscard3.pce
+  (SHA-1 79f5ff55…)`（`03` の 8.1 の値と同じ）、`Edition jp: no disc map (…/games/ys_jp/disc.toml); only its boot test is defined`。
+
+### 10.3 macOS で確かめたこと
+
+| 確かめたこと | 結果 |
+|---|---|
+| ビルド（`scripts/build.sh`） | 警告 0、`Built.` [C] |
+| `tools/check_layers.py --pcerecomp external/PCERecomp` | **OK** [C] |
+| `jp_boot_ysjp` | 合格（7.4 秒）。`CD: disc music played 35.4 s; ADPCM played 3.9 s`、`RAM $2C40 (16 bits): 1000, expected 1000: ok` [C] |
+| 煙試験がわざと違う値で落ちること | `--ram16 0x2C40=999` → `DIFFERENT`、失敗。北米版の番地 `0x2C41=1000` → 5123 で失敗。ボタンなしの 1200 フレーム → `the CD music did not play` で失敗。cue なし → 77 [C] |
+| `ctest -LE history -j 4 --repeat until-pass:2` | **91 本のうち 90 本合格、skip 1 本（`perf_ys`）、失敗 0**（1107 秒）[C]。内訳：北米版と共通の 90 本は 89 本合格・`perf_ys` の skip（3B-1 の前と同じ）、日本版の `jp_boot_ysjp` が合格。やり直しになった試験はない。`app_prep_ys` は 1 回目で合格（142 秒） |
+| `--edition` の 3 通り（`build.sh` が ctest に渡す引数と、`ctest -N` の本数） | 下の表 [C] |
+| `scripts/build.sh --edition xx`／`--package --edition jp` | `Unknown edition`（2）／`Edition 'jp' has no player package yet (Phase 3B)`（2）[C] |
+| ツールの `--edition jp` | `run_bios_check.py`：`no session found`（2）。`check_all_sessions.py`：`…/ys_trace_jp not found: build first`（1）。`make_package.py`：`no package for edition jp yet`（1）。`editions.get('xx')`：`unknown edition 'xx'; available: usa, jp`（2）[C] |
+| `build.ps1` | pwsh がこの Mac にないので動かしていない [W] |
+
+| `--edition` | `--test`（quick） | `--test-all` | `--test-hist` | `--package` の試験 |
+|---|---|---|---|---|
+| `all`（既定） | `-L quick`：22 本 | `-LE ^(history)$`：91 本（`jp_boot_ysjp` を含む） | `-L history`：10 本 | `-L package`：2 本 |
+| `usa` | `-L quick -LE ^(jp)$`：22 本 | `-LE ^(history\|jp)$`：90 本（3B-1 の前と同じ） | `-L history -LE ^(jp)$`：10 本 | 2 本 |
+| `jp` | `-L quick -LE ^(usa)$`：18 本（共通だけ） | `-LE ^(history\|usa)$`：20 本（共通 19 本と `jp_boot_ysjp`） | 0 本 | 0 本（その前に「まだない」で止まる） |
+
+- 気づいたこと（3B-1 の範囲外、記録だけ）：日本版のディスクは、北米版の System Card 2.0 でも同じところまで進む
+  （`run_boot_test.py` に 2.0 を渡すと合格する [C]）。煙試験は BIOS の版を確かめていない。BIOS の照合は 3B-5（Q5）。
+
+### 10.4 Windows の実機での確認手順（保留：後日まとめて行う。`09` の 6 章と同じ形）
+
+ROM と BIOS：北米版は今までどおり（`roms\` 直下に上流の名前）。日本版は `roms\jp\Ys I & II (Japan).cue`（と bin 43 本）、
+`roms\bios\syscard3.pce` に置く（置かない場合、`jp_boot_ysjp` は 77 の skip になる。skip は合格ではない）。
+before は `8a1033d`、after はブランチの先頭（3B-1 のコミットを含む）。サブモジュールはどちらも `76ab827`。
+runtime の C は変えていないので、before のビルドを after に使い回してもよい（`Remove-Item build` は before の前だけ）。
+
+```powershell
+cd C:\work\YsRecomp
+$env:Path = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;" + $env:Path
+# before
+git fetch; git checkout 8a1033d; git submodule update
+Remove-Item -Recurse -Force build
+.\build.ps1 *> b1_before_build.txt
+ctest --test-dir build -C Release -N | Select-String "Total Tests"     # -> 100
+ctest --test-dir build -C Release -N | Select-String "Test +#" | ForEach-Object { ($_ -split '\s+')[3] } | Set-Content b1_before_names.txt
+Copy-Item build\CTestTestfile.cmake b1_before_ctest.cmake
+ctest --test-dir build -C Release -LE history -j 2 --repeat until-pass:2 *> b1_before_testall.txt
+# after
+git checkout feature/japanese-disc-support; git pull; git submodule update
+.\build.ps1 *> b1_after_build.txt
+cmake -S . -B build | Select-String "YS_|Edition" *> b1_after_config.txt
+ctest --test-dir build -C Release -N | Select-String "Total Tests"     # -> 101
+ctest --test-dir build -C Release -N -L jp | Select-String "Test +#|Total Tests"   # -> jp_boot_ysjp, 1
+ctest --test-dir build -C Release -N | Select-String "Test +#" | ForEach-Object { ($_ -split '\s+')[3] } | Set-Content b1_after_names.txt
+Compare-Object (Get-Content b1_before_names.txt) (Get-Content b1_after_names.txt)
+Compare-Object ((Get-Content b1_before_ctest.cmake) -replace ' _BACKTRACE_TRIPLES "[^"]*"','') ((Get-Content build\CTestTestfile.cmake) -replace ' _BACKTRACE_TRIPLES "[^"]*"','') | Out-File b1_ctest_diff.txt
+ctest --test-dir build -C Release -LE history -j 2 --repeat until-pass:2 *> b1_after_testall.txt
+ctest --test-dir build -C Release -R jp_boot_ysjp -V | Select-String "CD:|RAM|OK:|FAILED|skipped" *> b1_after_jp.txt
+.\build.ps1 -TestAll -Edition usa *> b1_after_ed_usa.txt
+.\build.ps1 -TestAll -Edition jp *> b1_after_ed_jp.txt
+.\build.ps1 -Test *> b1_after_ed_all_quick.txt
+.\build.ps1 -Package -Edition jp *> b1_after_pkg_jp.txt
+.\build.ps1 -Package *> b1_after_pkg_all.txt
+python tools\trace\run_bios_check.py --edition jp *> b1_after_tools.txt
+git status --short
+Select-String -Path b1_*.txt -Pattern "warning|tests passed|\*\*\*Failed|Not Run|Skipped|Total Tests|YS_|Edition|Package|Zip|Built|RAM|OK:|no session" |
+  ForEach-Object { "$($_.Filename): $($_.Line.Trim())" } | Set-Content -Encoding utf8 b1_results.txt
+```
+
+| ID | 確かめること | 合格の条件 |
+|---|---|---|
+| W1 | 構成の表示 | `YS_USA_*` は前と同じ（`roms\` 直下）。`YS_JP_CUE: …/roms/jp/Ys I & II (Japan).cue (SHA-1 bdb25f76…)`、`YS_JP_BIOS: …/roms/bios/syscard3.pce (SHA-1 79f5ff55…)`、`Edition jp: no disc map …`（cue の SHA-1 は改行の違いで変わってもよい） |
+| W2 | 試験の本数と名前 | before 100、after 101。名前の `Compare-Object` は `jp_boot_ysjp`（`=>`）の 1 行だけ |
+| W3 | 試験の定義 | `b1_ctest_diff.txt` の行はすべて `=>` で、`jp_boot_ysjp` の行と `if(CTEST_CONFIGURATION_TYPE…`・`elseif`・`else()`・`endif()` だけ（`<=` の行がない） |
+| W4 | 全試験（history 以外） | before 90 本、after 91 本。`jp_boot_ysjp` 以外の合格・skip・失敗が前後で同じ（skip は `perf_ys`）。after の `b1_after_build.txt` に `warning` の行がない |
+| W5 | 煙試験 | `b1_after_jp.txt` に `RAM $2C40 (16 bits): 1000, expected 1000: ok` と `OK: the disc booted with the BIOS and reached the game`（macOS と同じ。日本版を置いていなければ `skipped`） |
+| W6 | `-Edition` の 3 通り | `-TestAll -Edition usa`：90 本（`jp_boot_ysjp` が出ない）。`-TestAll -Edition jp`：20 本（`jp_boot_ysjp` を含み、`_ys` で終わる北米版の試験が出ない）。`-Test`（既定 `all`）：22 本 |
+| W7 | パッケージ | `-Package -Edition jp` は `Edition 'jp' has no player package yet (Phase 3B)` で止まる。`-Package`（`all`）は今までどおり `dist\YsRecomp\` と `dist\YsRecomp.zip` を作る（日本版の分で失敗しない） |
+| W8 | ツール | `run_bios_check.py --edition jp` は `no session found`（Python の例外が出ない） |
+| W9 | 作業ツリー | `git status --short` に `??` のログ以外が出ない |
+
+貼っていただくもの：`b1_results.txt`、2 つの `Compare-Object` の出力（`b1_ctest_diff.txt`）、`git status --short`。
+
+### 10.5 未解決・次の段へ
+
+| ID | 内容 | 段 |
+|---|---|---|
+| B1-1 | Windows での 3B-1 の確認（10.4。`build.ps1 -Edition` は macOS で動かせない） | 後日の実機 [W] |
+| B1-2 | `ys_edition()` の中のターゲット名・試験名の引数化（`EXE`・`TRACE`・`PTRACE`・`PROFILE`・`EQUIP`。M2-3 の残り） | 3B-2、3B-3 |
+| B1-3 | `pce_trace_jp`（日本版の profile をリンクしたもの）。それまで煙試験は `pce_trace` を Ys のオプションなしで使う | 3B-2 以降 |
+| B1-4 | ツールの `--edition jp` は受け付けるだけ（セッション・実行ファイルがない）。M2-4 の 6 本の版の引数 | 3B-7 |
+| B1-5 | `05` の 14.6（Windows での 3A の確認の結果）はまだ書かれていない（14.4 は保留のまま） | 後日の実機 [W] |

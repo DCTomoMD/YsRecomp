@@ -1,17 +1,26 @@
-# Editions of the game (USA; JP from Phase 3B): where each one's disc and BIOS are, and everything that belongs to one
-# edition (disc map, generated C, YsRecomp, ys_trace and the tests on its disc). Operating-system differences never go
-# here (cmake/platform_*.cmake). Design: review_jp/02_build_layout.md, chapter 2.
+# Editions of the game (USA, JP): where each one's disc and BIOS are, and everything that belongs to one edition (disc
+# map, generated C, YsRecomp, ys_trace and the tests on its disc). Operating-system differences never go here
+# (cmake/platform_*.cmake). Design: review_jp/02_build_layout.md, chapter 2.
 
-# ys_rom_file(VAR FILE_NAME SUBFOLDER DESCRIPTION)
+# ys_rom_file(VAR FILE_NAME SUBFOLDER DESCRIPTION [SUBFOLDER_ONLY])
 # The user's disc or BIOS file (roms/, outside Git). The cache variable VAR picks the file (-DVAR=...); left empty, the
 # first one that exists of roms/FILE_NAME (upstream's place) and roms/SUBFOLDER/FILE_NAME, or the first one when
-# neither exists. The chosen path is set as a normal variable VAR (it hides the empty cache entry), so the rest of
+# neither exists. SUBFOLDER_ONLY (the JP edition, which upstream does not have): only roms/SUBFOLDER/FILE_NAME.
+# The chosen path is set as a normal variable VAR (it hides the empty cache entry), so the rest of
 # the CMake code reads ${VAR} either way, and is decided again at every configuration (adding the files later is
 # enough). tools/editions.py follows the same rule.
 function(ys_rom_file var file_name subfolder description)
-    set(${var} "" CACHE FILEPATH "${description} (empty: roms/${file_name}, otherwise roms/${subfolder}/${file_name})")
+    if("${ARGN}" STREQUAL "SUBFOLDER_ONLY")
+        set(${var} "" CACHE FILEPATH "${description} (empty: roms/${subfolder}/${file_name})")
+    elseif(NOT "${ARGN}" STREQUAL "")
+        message(FATAL_ERROR "ys_rom_file: unknown argument '${ARGN}'")
+    else()
+        set(${var} "" CACHE FILEPATH "${description} (empty: roms/${file_name}, otherwise roms/${subfolder}/${file_name})")
+    endif()
     set(path "$CACHE{${var}}")
-    if(NOT path)
+    if(NOT path AND "${ARGN}" STREQUAL "SUBFOLDER_ONLY")
+        set(path "${CMAKE_SOURCE_DIR}/roms/${subfolder}/${file_name}")
+    elseif(NOT path)
         set(path "${CMAKE_SOURCE_DIR}/roms/${file_name}")
         if(NOT EXISTS "${path}" AND EXISTS "${CMAKE_SOURCE_DIR}/roms/${subfolder}/${file_name}")
             set(path "${CMAKE_SOURCE_DIR}/roms/${subfolder}/${file_name}")
@@ -26,16 +35,34 @@ function(ys_rom_file var file_name subfolder description)
     set(${var} "${path}" PARENT_SCOPE)
 endfunction()
 
-# ys_edition(ID id CUE cue BIOS bios GAME_DIR folder)
-# Defines one edition's targets and tests, and labels its tests with the edition id (ctest -L usa). The tests that only
-# need the interpreter (pce_trace) are always defined and exit with 77 without the disc; the generated C, YsRecomp,
-# ys_trace and the tests that use them only exist with both the disc and the BIOS (the same conditions as before M2).
-# M2: only the USA edition, with today's target and test names; the JP one (other names, its profile, no
-# equipment) comes in Phase 3B.
+# ys_edition_label(ID TESTS_BEFORE...)
+# The edition's label on every test defined since TESTS_BEFORE was read (added to the group labels set in
+# CMakeLists.txt).
+function(ys_edition_label id)
+    get_property(tests_after DIRECTORY PROPERTY TESTS)
+    if(ARGN)
+        list(REMOVE_ITEM tests_after ${ARGN})
+    endif()
+    foreach(t ${tests_after})
+        set_property(TEST ${t} APPEND PROPERTY LABELS ${id})
+    endforeach()
+endfunction()
+
+# ys_edition(ID id CUE cue BIOS bios GAME_DIR folder
+#            [SUFFIX suffix BOOT_INPUT buttons BOOT_FRAMES frames [BOOT_RAM16 address=value ...]])
+# Defines one edition's targets and tests, and labels its tests with the edition id (ctest -L usa, -L jp). The tests
+# that only need the interpreter (pce_trace) are always defined and exit with 77 without the disc; the generated C,
+# YsRecomp, ys_trace and the tests that use them only exist with both the disc and the BIOS (the same conditions as
+# before M2).
+# BOOT_INPUT: the boot smoke test <id>_boot<suffix> (tools/trace/run_boot_test.py: the disc boots with its BIOS and
+# reaches the game; BOOT_RAM16 = values of the work RAM at the last frame, read from that disc).
+# An edition without a disc map yet (no GAME_DIR/disc.toml: the JP one until Phase 3C) has no generated C and none of
+# the tests below the boot one. The target and test names below it are still the USA edition's (per-edition names:
+# later steps of Phase 3B), so a disc map in another edition is a configuration error for now.
 function(ys_edition)
-    cmake_parse_arguments(PARSE_ARGV 0 ARG "" "ID;CUE;BIOS;GAME_DIR" "")
-    if(NOT ARG_ID STREQUAL "usa")
-        message(FATAL_ERROR "ys_edition: edition '${ARG_ID}' not available yet (only usa until Phase 3B)")
+    cmake_parse_arguments(PARSE_ARGV 0 ARG "" "ID;CUE;BIOS;GAME_DIR;SUFFIX;BOOT_INPUT;BOOT_FRAMES" "BOOT_RAM16")
+    if(ARG_UNPARSED_ARGUMENTS OR NOT ARG_ID OR NOT ARG_GAME_DIR)
+        message(FATAL_ERROR "ys_edition: ID and GAME_DIR are needed; unknown arguments: '${ARG_UNPARSED_ARGUMENTS}'")
     endif()
     set(YS_CUE "${ARG_CUE}")
     set(SYSCARD2 "${ARG_BIOS}")
@@ -45,6 +72,26 @@ function(ys_edition)
     set(YS_CUE_VAR "YS_${id_upper}_CUE")
     set(YS_BIOS_VAR "YS_${id_upper}_BIOS")
     get_property(tests_before DIRECTORY PROPERTY TESTS)
+
+    # Boot smoke test: the disc with its real BIOS, the button script, and the game reached (no image compared)
+    if(PYTHON_EXE AND ARG_BOOT_INPUT)
+        set(boot_ram "")
+        foreach(v ${ARG_BOOT_RAM16})
+            list(APPEND boot_ram --ram16 ${v})
+        endforeach()
+        add_test(NAME ${ARG_ID}_boot${ARG_SUFFIX} COMMAND ${PYTHON_EXE} "${CMAKE_SOURCE_DIR}/tools/trace/run_boot_test.py"
+            $<TARGET_FILE:pce_trace> "${YS_CUE}" "${SYSCARD2}" "${ARG_BOOT_INPUT}" ${ARG_BOOT_FRAMES}
+            "${CMAKE_BINARY_DIR}/ys_${ARG_ID}_output/boot" ${boot_ram})
+        set_tests_properties(${ARG_ID}_boot${ARG_SUFFIX} PROPERTIES SKIP_RETURN_CODE 77)
+    endif()
+    if(NOT EXISTS "${YS_GAME_DIR}/disc.toml")
+        message(STATUS "Edition ${ARG_ID}: no disc map (${YS_GAME_DIR}/disc.toml); only its boot test is defined")
+        ys_edition_label(${ARG_ID} ${tests_before})
+        return()
+    endif()
+    if(NOT ARG_ID STREQUAL "usa")
+        message(FATAL_ERROR "ys_edition: edition '${ARG_ID}' has a disc map, but the targets and tests below still have the USA edition's names")
+    endif()
 
     # CD-ROM² with the real BIOS (System Card 2.0) and Ys: they need the user's disc and BIOS (CUE, BIOS).
     # Boot: 3 million instructions up to the "PUSH RUN BUTTON!" screen (frame 600).
@@ -724,12 +771,5 @@ function(ys_edition)
             FAIL_REGULAR_EXPRESSION "FAILED")
     endif()
 
-    # The edition's label on every test defined above (added to the group labels set in CMakeLists.txt)
-    get_property(tests_after DIRECTORY PROPERTY TESTS)
-    if(tests_before)
-        list(REMOVE_ITEM tests_after ${tests_before})
-    endif()
-    foreach(t ${tests_after})
-        set_property(TEST ${t} APPEND PROPERTY LABELS ${ARG_ID})
-    endforeach()
+    ys_edition_label(${ARG_ID} ${tests_before})
 endfunction()

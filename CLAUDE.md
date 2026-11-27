@@ -221,7 +221,8 @@ natively on PC (Windows). The generated C mimics the CPU instruction by instruct
   `ys_rom_file`）。空のとき（既定）は、上流の場所（`roms/Ys Book I & II (USA).cue`、
   `roms/[BIOS] TurboGrafx CD System Card (USA) (v2.0).pce`）にあればそれを使い、なければ `roms/usa/` と `roms/bios/` の
   同じ名前のファイルを使う。どれを使ったかは構成時に `-- YS_USA_CUE: ...`（BIOS は SHA-1 付き）と出る。
-  Python のツールも同じ規則で選ぶ（`tools/editions.py`）。日本版の変数（`YS_JP_CUE`・`YS_JP_BIOS`）は Phase 3B で追加する。
+  Python のツールも同じ規則で選ぶ（`tools/editions.py`）。日本版（3B-1）は `YS_JP_CUE`・`YS_JP_BIOS`。
+  空のときは `roms/jp/Ys I & II (Japan).cue` と `roms/bios/syscard3.pce` だけを見る（上流の場所はない）。
 - roms/ の中身は移動・リンク・改名しない（読み取り専用）。
 
 ## フェーズ順序（macOS 先行）
@@ -330,7 +331,10 @@ roms/ 直下に北米版の cue と bin 43 本、System Card (USA) v2.0 を上�
   層の規則は試験 `host_layers`（`tools/check_layers.py`、quick）が確かめる。
 - 版の差は `cmake/ys_edition.cmake` の `ys_edition()` と `tools/editions.py` に置く。版の試験にはラベル（`usa`）が付く。
   `build.ps1 -Edition usa|jp|all` / `scripts/build.sh --edition ...`（既定 `all`）は、ほかの版の試験を `-LE` で除く
-  （`-L` を 2 つ並べると AND になり、版のない共通の試験が外れるため）。`jp` は Phase 3B まで「まだない」で終わる。
+  （`-L` を 2 つ並べると AND になり、版のない共通の試験が外れるため）。`jp`（3B-1）は、ディスクの地図
+  （`games/ys_jp/disc.toml`）がまだないので、生成 C も実行ファイルもなく、試験は起動の煙試験 `jp_boot_ysjp`（`console`。
+  `tools/trace/run_boot_test.py`：System Card 3.0 で日本版が起動して新しいゲームまで進む）だけ。`--package --edition jp` は
+  「まだない」で終わる（`all` は北米版だけを作る）。`ys_edition()` の中のターゲット名・試験名はまだ北米版のもの。
 
 ### CI（GitHub Actions、Windows x64）
 - `.github/workflows/windows-ci.yml`：試験対象のコミットと基準（`06b62c6`）を同じ runner でビルドし、ROM 不要の試験を
