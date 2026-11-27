@@ -185,8 +185,12 @@ natively on PC (Windows). The generated C mimics the CPU instruction by instruct
 - 主開発機：macOS / Apple Silicon（arm64）、APFS ボリューム、パスに空白なし。
 - 上流 YsRecomp は Windows / MSVC / PowerShell 前提。M3 完了まで macOS ではゲーム本体をビルドできない。
   ビルドできない状態で「動作確認済み」と報告してはならない。
-- Windows での検証は、ユーザーが Windows VM 上で行う。
-  Windows のビルド・試験が必要な場合は、VM で実行するコマンドと期待結果を提示して停止する。
+- Windows での検証は、ユーザーが後日 Windows の実機でまとめて行う（2026-11-28 の方針。それまでは macOS の実機で
+  開発を先に進める）。各段では Windows で実行するコマンドと期待結果を文書に残し、「Windows で確認待ち」の一覧に足して、
+  止まらずに次の承認を待つ。Windows で確かめていないことを「Windows で確認済み」と書かない。
+  確認待ちの一覧：review_jp/05 の 14.4（3A 全体）と、3B 以降の各段の結果の節。push すれば CI（Windows x64、ROM の
+  要らない試験だけ）が動くので、その結果があれば報告に書く。
+  実機での確認は区切り（3B の終わりなど）でまとめて行うのを勧める。遅らせるほど、壊れた段を探す手間が増える。
 - Python は `.venv/bin/python` を使う（tomllib のため 3.11 以上が必要。上流は 3.14 を前提）。
   `brew install` と `pip install` は実行前に必ず確認を求める。
 - シェルコマンドは macOS（BSD）互換で書く。
@@ -225,7 +229,7 @@ natively on PC (Windows). The generated C mimics the CPU instruction by instruct
 2. 設計・解析：Phase 1（Plan mode）、Phase 2（日米ディスク解析）。
 3. Mac 版を動かす：M1 → M2 → M3。北米版を macOS で動かし、これを新しい基準にする。
 4. 日本版の実装：Phase 3A〜3D。
-5. 統合試験：Phase 4（macOS と Windows VM の両方）。
+5. 統合試験：Phase 4（macOS と Windows の実機の両方）。
 6. 監査：Fable 5.2（別の worktree で実施）。
 
 ## 役割
@@ -258,7 +262,7 @@ natively on PC (Windows). The generated C mimics the CPU instruction by instruct
 - review_fable/、review_fable_final/：Fable の監査報告（Opus は上書きしない）
 - review_opus/：Fable の指摘の再検証と修正の記録
 
-## profile 層（Phase 3A、2026-11-28 に macOS で完了。Windows の確認は review_jp/05 の 14.4）
+## profile 層（Phase 3A、2026-11-28 に macOS で完了。Windows の確認は後日の実機で、手順は review_jp/05 の 14.4）
 - ディスクに由来する値と、版の名前・文言は `runtime/profile/` に置く：`ys_profile.h`（型と、コンパイル時の定数）と
   `profile_usa.c`（`const YsProfile g_ys_profile`。北米版の値）。各モジュールは `g_ys_profile.<module>` を読み、版を尋ねない。
   実行ファイルは profile をちょうど 1 つリンクする（`ys_profile_usa`。日本版の `profile_jp.c` は Phase 3B）。
@@ -275,7 +279,7 @@ natively on PC (Windows). The generated C mimics the CPU instruction by instruct
 ## ビルドと試験
 出典：review_jp/00_repository_inventory.md の 2 章、11 章、18 章（上流の README と build.ps1 から書き出したもの。未検証）。
 
-### Windows（VM、上流の手順）
+### Windows（実機、上流の手順）
 前提：Windows 10/11 x64、VS 2022 Build Tools、Python 3.14、Git。初回の構成時に SDL3 を取得するためネットワークが必要。
 roms/ 直下に北米版の cue と bin 43 本、System Card (USA) v2.0 を上流の固定名で置く。
 
@@ -340,7 +344,7 @@ roms/ 直下に北米版の cue と bin 43 本、System Card (USA) v2.0 を上�
 ## 報告
 - 文書と報告は日本語で書く。コード中のコメントと識別子は英語で書く。
 - 各 Phase の終了時に、変更ファイル一覧、git diff --stat、実行したコマンド、試験結果、
-  未実施の項目（特に Windows VM での確認待ち）、未解決事項を報告する。
+  未実施の項目（特に Windows の実機での確認待ち）、未解決事項を報告する。
 
 ## セッション再開時
 最初に git status、git log --oneline -15、review_* 配下を確認し、

@@ -609,7 +609,7 @@ T1 は全ファイルを合わせて数えるので、コードに新しく書�
 |---|---|---|
 | E1 | `runtime/profile/` に `ys_profile.h` と `profile_usa.c`。`g_ys_profile` を定義するのは `profile_usa.c:292` だけ（`grep`）。`ys_profile_usa` をリンクする実行ファイルは `pce_runtime`・`pce_trace`・`app_tests`・`equip_check`・`ys_trace`・`YsRecomp` の 6 つで、それぞれ 1 回だけ（`CMakeLists.txt:113, 121, 130`、`cmake/ys_edition.cmake:189, 198, 207`）。ほかの profile はまだない | 合格 [C] |
 | E2 | 段ごとの T1 は 6 回とも差 0（8.2、9.3、10.3、11.3、12.3、13.3）。3A の全体（`3956404` → `e9a5a29`）でも、段の引数を合わせ、14.3 の 2 つを足すと差 0 | 合格 [C] |
-| E3 | macOS：段ごとに 100 本、`-LE history` で 89 本合格・`perf_ys` skip・失敗 0。history は 3A-4・3A-5・3A-7 で 10 本合格（14.5）。期待値は変えていない（`app_tests.c` は 3A-4 で表 1 つの `static` を外しただけ、11.1）。**Windows は 14.4 の手順で確かめる（未実施）** | macOS は合格 [C]、Windows は待ち |
+| E3 | macOS：段ごとに 100 本、`-LE history` で 89 本合格・`perf_ys` skip・失敗 0。history は 3A-4・3A-5・3A-7 で 10 本合格（14.5）。期待値は変えていない（`app_tests.c` は 3A-4 で表 1 つの `static` を外しただけ、11.1）。**Windows は 14.4 の手順で確かめる（保留：2026-11-28 の方針で、後日ユーザーが Windows の実機でまとめて行う）** | macOS は合格 [C]、Windows は保留 |
 | E4 | `tools/check_layers.py --pcerecomp external/PCERecomp`（試験 `host_layers`）が段ごとに OK。規則 6（profile から `app/`・`host/`・SDL を include しない）と規則 7（版の分岐を書かない）を 3A-1 で足した | 合格 [C] |
 | E5 | 規則 7 が `runtime/app/`・`main.c`・`tools/trace/` で版の分岐がないことを確かめている。3A で足したコードにも `#ifdef` や `edition_id` の比較はない | 合格 [C] |
 | E6 | サブモジュールの指す先は `3956404` と同じ `76ab827`（`git ls-tree`）。`external/PCERecomp` の作業ツリーに変更はない | 合格 [C] |
@@ -643,6 +643,10 @@ T1 は全ファイルを合わせて数えるので、コードに新しく書�
   文字列 12 個がコードから消え、profile の 9 個の文字列と、それを入れる書式で元と同じになる。
 
 ### 14.4 Windows での 3A 全体の確認手順（Q9）
+
+状態：**保留**（2026-11-28）。開発は macOS の実機で先に進め、この確認は後日ユーザーが Windows の実機で行う（CLAUDE.md の
+「開発環境」）。3B 以降で確認待ちが増えても、before は `3956404` のまま。after に実行する日のブランチの先頭を使うと、3A より後の
+差も含むので、そのことを結果に書く（3A だけを判定するなら、after を 3A の最後のコミットにして別に流す）。
 
 M3 と同じ実機（`review_portability/11_m3_summary.md` の 5 章と同じ形）。`reference/` と `gg_trace.exe` は M3-8 で入れたものをそのまま使う。
 
