@@ -8,26 +8,23 @@
 #include "pce/pce.h"
 #include "util/u8file.h"
 
-/* Cursor, confirm and "not released" ($17: short, low and falling, ~166 -> 81 Hz, like the mock-up's) */
-const uint8_t launcher_sfx_numbers[3] = { 0x13, 0x12, 0x17 };
+/* The effects: cursor, confirm and "not released" ($17 in Ys I & II USA: short, low and falling, ~166 -> 81 Hz, like
+ * the mock-up's): launcher_sfx_numbers (g_ys_profile.launcher_sfx) */
 
-/* Hidden console script (frames measured without the BIOS with pce_trace --input): RUN at the copyright,
- * at the goddess and at the main menu ("Beginning"); then RUN every 40 frames skips the prologue until the game
- * gives the tables to the sound driver ($22D0-$22D1 = songs; ~frame 3705) */
-#define CAP_FIRST_PULSE 2560
-#define CAP_MAX_FRAMES 7000
-#define CAP_SETTLE 150    /* frames after the tables: the game music starts, the effects stop */
+/* Hidden console script (g_ys_profile.launcher_sfx, frames measured without the BIOS with pce_trace --input): RUN at the
+ * copyright, at the goddess and at the main menu ("Beginning"); then RUN pressed now and then skips the prologue until
+ * the game gives the tables to the sound driver ($22D0-$22D1 = songs) */
 #define CAP_SFX_MAX 240   /* maximum frames per effect */
 #define CAP_SFX_QUIET 20  /* frames of silence = the effect ended */
 #define RAM(a) (0x1F0000u + ((a) - 0x2000u)) /* physical address of the work RAM ($2000-$3FFF) */
 
 static int pressed(long f)
 {
-    static const long k_fixed[3][2] = { { 1644, 1650 }, { 1965, 1971 }, { 2487, 2496 } };
-    for (int i = 0; i < 3; i++)
-        if (f >= k_fixed[i][0] && f < k_fixed[i][1])
+    const YsLauncherSfxProfile *p = g_ys_profile.launcher_sfx;
+    for (int i = 0; i < (int)(sizeof(p->fixed) / sizeof(p->fixed[0])); i++)
+        if (f >= p->fixed[i][0] && f < p->fixed[i][1])
             return 1;
-    return f >= CAP_FIRST_PULSE && (f - CAP_FIRST_PULSE) % 40 < 6;
+    return f >= p->first_pulse && (f - p->first_pulse) % p->pulse_every < p->pulse_len;
 }
 
 static int frame_silent(const Pce *p)
@@ -54,28 +51,29 @@ static int run_capture(LauncherCapture *c)
     p->mix.psg_sfx = MIX_MEDNAFEN_PSG;
     p->mix.adpcm = p->mix.cdda = 0.0f;
     p->mix.chip_filter = 1;
+    const YsLauncherSfxProfile *sp = g_ys_profile.launcher_sfx;
     long f = 0, ready = -1;
     uint8_t tables[2] = { 0, 0 };
-    for (; f < CAP_MAX_FRAMES && !SDL_GetAtomicInt(&c->cancel); f++) {
-        if (f == CAP_FIRST_PULSE) {
+    for (; f < sp->max_frames && !SDL_GetAtomicInt(&c->cancel); f++) {
+        if (f == sp->first_pulse) {
             tables[0] = pce_bus_read(p, RAM(0x22D0));
             tables[1] = pce_bus_read(p, RAM(0x22D1));
         }
-        if (ready < 0 && f > CAP_FIRST_PULSE &&
+        if (ready < 0 && f > sp->first_pulse &&
             (pce_bus_read(p, RAM(0x22D0)) != tables[0] || pce_bus_read(p, RAM(0x22D1)) != tables[1]))
             ready = f;
         p->pad_buttons = ready < 0 && pressed(f) ? PCE_PAD_RUN : 0;
         pce_run_frame(p, 10000000);
-        if (ready >= 0 && f - ready >= CAP_SETTLE && frame_silent(p))
+        if (ready >= 0 && f - ready >= sp->settle && frame_silent(p))
             break;
     }
-    c->ok = ready >= 0 && f < CAP_MAX_FRAMES;
+    c->ok = ready >= 0 && f < sp->max_frames;
     int16_t *buf = c->ok ? malloc((size_t)CAP_SFX_MAX * PSG_BUFFER_SIZE * sizeof(int16_t)) : NULL;
     for (int i = 0; buf && i < c->count && !SDL_GetAtomicInt(&c->cancel); i++) {
         /* Like the driver's "play" function (hle_psg.c, $0B) */
         pce_bus_write(p, RAM(0x22E1), c->numbers[i]);
         pce_bus_write(p, RAM(0x22E2), 0);
-        pce_bus_write(p, RAM(0x20E7), (uint8_t)(pce_bus_read(p, RAM(0x20E7)) & 0x7F));
+        pce_bus_write(p, RAM(sp->sfx_flags), (uint8_t)(pce_bus_read(p, RAM(sp->sfx_flags)) & sp->sfx_play_mask));
         int n = 0, quiet = 0, heard = 0;
         for (int k = 0; k < CAP_SFX_MAX && quiet < CAP_SFX_QUIET; k++, f++) {
             pce_run_frame(p, 10000000);

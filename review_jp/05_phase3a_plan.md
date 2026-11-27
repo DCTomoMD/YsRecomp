@@ -402,3 +402,86 @@ T1 は全ファイルを合わせて数えるので、コードに新しく書�
 - history は 3A-4・3A-5 の後と 3A-7 で回す（3.2 のとおり）。3A-3 で触れたフックは、セッションの試験（`session_ys_*`）、
   ウィンドウの試験（`windows_ys`、`windows_ys1`、`windows_crop_ys`、`window_ys`、`window_ring_ys`）、`intro_ys`、`dialog_ys`、`equip_c_ys`（`ys_fade.c`）で通っている。
 - Windows での確認は 3A-7 でまとめて行う（Q9）。
+
+---
+
+## 11. 3A-4 の結果（2026-11-28、macOS）
+
+基準は `f2caa50`（3A-3 のコミット）。
+
+### 11.1 変えたもの
+
+| ファイル | 内容 |
+|---|---|
+| `runtime/profile/ys_profile.h` | `YsCommonRam`、`YsEngineProfile`（と `YsEngineHook`、`YS_ENGINE_HOOK_*`）、`YsPanelProfile`、`YsEquipProfile`、`YsMenuFontProfile`、`YsLauncherSfxProfile`、`YsIntroSkipProfile`。`YsProfile` に 7 つのポインタを足した。`YsRewardProfile` から `actor`・`gold`・`exp` を `YsCommonRam` に移した（下の「同じ値の写し」） |
+| `runtime/profile/profile_usa.c` | 北米版の値。値は変えずに移した |
+| `runtime/app/ys_engine.c` | フック 4 行とバンク `$80`、鉱山の明かりの写し（`$86:7108`、シグネチャ、`$7673`）、Adol の誕生（`$75A5`・`$75A7`、シグネチャ）、キャラクターの表 7 つ、リストのカメラ、歩く者の表 7 つと `$2092`、前景のセルの RAM 6 つを `g_ys_profile.engine` から。歩く者のキャラクター・EXP・GOLD は `g_ys_profile.common` から。16 ビットの読み方 8 か所は `ram16` 1 つにまとめた |
+| `runtime/app/ys_reward.c` | 歩く者のキャラクター・GOLD・EXP を `g_ys_profile.common` から（値は同じ） |
+| `runtime/app/ys_panel.c`・`.h` | 次のレベルの EXP `$2C4A`（3 バイト）と最大 H.P `$2C48`。タイルのマクロ `YS_TILE_*`（13 個）は名前を残し、中身を `g_ys_profile.panel` を読む式にした（`crop.c`・`ys_trace_ext.c`・`app_tests.c` は変えずに済む）。`YS_PANEL_X/Y/ROWS/COLS`・`YS_BAR_FIRST_COL`（パネルの位置と配列の大きさ）は 3A-5 |
+| `runtime/app/equip.c` | 品目の表（`$82:6321`）と Ys I・Ys II の先頭の並び、装備の RAM `$2C71`（3 バイト）、Adol のパレット 13 と氷のパレット 14 を `g_ys_profile.equip` から。並びの比較は `memcmp` にした（同じ結果） |
+| `runtime/app/fade.c` | 装備の直接の色を読むパレット 13（`256 + 13 * 16 + 1` から `256 + 14 * 16` まで）を `adol_pal` と `adol_pal + 1` から |
+| `runtime/app/menu_font.h` | `MENU_FONT_FIRST`（449）・`MENU_FONT_ARROW`（504）・`MENU_FONT_CRC` を `g_ys_profile.menu_font` から。`MENU_FONT_TILES`・`MENU_FONT_WORDS` は配列とキャッシュのファイルの大きさなので 3A-5（Q2） |
+| `runtime/app/launcher_sound.c`・`.h` | 効果音の番号 3 つ、隠しスクリプトのフレーム（決まった押下 3 組、最初の連打、40 フレームごとに 6 フレーム、上限 7000、落ち着くまで 150）、音源ドライバのフラグ `$20E7` とマスク `$7F` を `g_ys_profile.launcher_sfx` から。`launcher_sfx_numbers` は同じ名前のマクロにした（`main.c`・`app_tests.c` は変えずに済む） |
+| `runtime/app/intro_skip.h` | `INTRO_MAX_FRAMES`（4000）を `g_ys_profile.intro_skip` から |
+| `tests/app/app_tests.c` | 2038 行の表 `k_kind1`・`k_kind2` を `static const int` から `const int` にした。タイルが定数でなくなり、静的な初期化に書けないため。値も期待も変えていない（作業規則 v2 の 6 に当たらない） |
+| `tools/profile_values.py` | `--as OLD:NEW:COUNT` を足した（11.2） |
+
+- 手で導いていた PC の範囲（`ys_engine.c:65` の `0x4000`〜`0x6000`。窓 2 の範囲）は、3A-2・3A-3 と同じく、profile の表の最小値と最大値から計算する形にした。
+  範囲は `$4D58`〜`$4E60` と狭くなるが、範囲は表を引く前の速い試しにすぎず、表の PC はすべてその中にあるので、結果は同じ。
+- **同じ値の写し**：歩く者のキャラクター `$2736`、EXP `$2ABB`、GOLD `$2C41` は、3A-2 で `YsRewardProfile` に入れていたが、`ys_engine.c` も同じ番地を読む。
+  2 か所に置かないように、両方が読む `YsCommonRam`（`g_ys_profile.common`）に移した。`tools/trace/` の写し（2.5）は 3A-6 でここを読むようにする。
+- `equip.c` の表の位置は、前は CD RAM の中の位置 `2 * 0x2000 + 0x0321` と書いていた。profile には文書と同じバンクと論理番地（`$82`、`$6321`）を置き、
+  `(items_bank - 0x80) * 0x2000 + (items & 0x1FFF)` で同じ位置 `0x4321` を求める。
+- パネルのタイルの `tile_h`（257）と `tile_label_first`、`tile_m`（266）と `tile_label_last`、`tile_slash`（460）と `tile_digit_last`、
+  メニューのフォントの `first`（449）とパネルの `tile_digit_first` は、北米版では同じ値だが意味が違う（文字の範囲と、ラベルの 1 文字目など）。
+  日本版で別の値になりうるので、別の項目のままにした。
+- コードに残したもの：`$2216`（`ys_engine.c`。System Card の作業域、Q3）、`$220E/0F/12/13`（`ys_panel.c`、Q3）、`$22D0/D1`・`$22E1/E2`（`launcher_sound.c`、Q3）、
+  CD RAM のバンク `$80`〜`$87`（ハードウェア）、`YS_ACTORS`・`YS_WALKERS`・状態 `0x50`（Q8）、前景の表の大きさ 256（配列、Q2）、
+  装備の絵のポーズ `$10`〜`$1F` と絵から導いた値（`equip.c`、`01` の 3.3 でも絵の側として扱う）、文字からタイル番号への対応（`menu_font.c:176-179`、2.3）、
+  効果音を取り出すときの一般の上限（`CAP_SFX_MAX` 240、`CAP_SFX_QUIET` 20、無音の判定 8、1 フレームの標本 735、次の効果音までの 30）。
+  最後のものは音を切り出す規則で、ディスクの中身ではない [A]。日本版で効果音が長ければ変える。
+
+### 11.2 T1 の引数と理由
+
+`--as OLD:NEW:COUNT` を足した：`--ram` と同じ「書き方を変えた値」の一般の形。`OLD` がコードから消え、`NEW` が profile に入った（コードは `NEW` から `OLD` を求める）。
+
+3A-4 の引数（基準 `f2caa50`）：
+
+| 引数 | 理由 |
+|---|---|
+| `--allow 0x4000:1`、`0x6000:1` | 手で書いていた PC の範囲を、表から計算する形にした |
+| `--allow 0x7108:1` | 写しの PC を 2 回書いていた（比較と読む先） |
+| `--allow 0x2053:1`、`0x205E:1`、`0x2060:1`、`0x2C34:1`、`0x2C36:1`、`0x2C56:1`、`0x2ABC:1`、`0x2C42:1`、`0x2C4B:1`、`0x2C4C:1`、`0x2C72:1`、`0x2C73:1` | 2 バイト目以降を「先頭 + n」（`ram16`、`slots + 1` など）にした |
+| `--allow 0x20E7:1` | 同じ番地を読んで書いていた |
+| `--allow 0x2736:1`、`0x2ABB:1`、`0x2C41:1` | `ys_engine.c` の写し。値は 3A-2 から profile にある（`YsCommonRam` に移した） |
+| `--allow 0:3`、`1:2`、`2:2`、`3:2` | `equip.c` の `t[0]`〜`t[3]`（並びの比較を `memcmp` にした。`3` は 2 個）と、`ys_engine.c` の `sizeof(k_hooks[0])`（`0` の 3 個目） |
+| `--allow 3:2` の残り（計 `--allow 3:4`） | `launcher_sound.c` のループの上限 `i < 3`（`sizeof` にした）と、`launcher_sfx_numbers[3]` の大きさを `.h` と `.c` の 2 か所に書いていたもの |
+| `--allow 5:1`、`6:1`、`7:1` | シグネチャを比べるループの上限 `k < 5`、`k < 6`、`k < 7` を `sizeof` にした |
+| `--allow 8:8`、`--new 8:1` | `ys_engine.c` の 16 ビットの読み方 `<< 8` の 8 か所を、`ram16` の 1 か所にまとめた |
+| `--allow 13:2`、`14:3` | パレット 13・14 を何度も書いていたもの（`equip.c`）と、`fade.c` の `14 * 16`（`adol_pal + 1` にした。その `1` は `--new 1` に数えた） |
+| `--new 0:5` | `ys_engine.c` の `hooks[0]`・`hero_pc[0]`、`launcher_sound.c` の `sizeof(p->fixed[0])`、`equip.c` の `memcmp(...) == 0` 2 つ |
+| `--new 1:7` | `ys_engine.c` の 4（`h = 1`、`g_pc_range = 1`、`hero_pc[1]`、`ram16` の `a + 1`）、`fade.c` の `adol + 1`、`ys_panel.c` の `next_level + 1`、`equip.c` の `slots + 1` |
+| `--new 2:2` | `ys_panel.c` の `next_level + 2`、`equip.c` の `slots + 2` |
+| `--new 0x80:1` | `equip.c` の CD RAM の先頭のバンク（ハードウェア）。北米版のエンジンのバンク `$80` は profile に移った |
+| `--dim 2:1`、`4:2` | `hero_pc[2]`（比較 2 つ）、`ys1_items[4]`・`ys2_items[4]`（比較 4 つずつ） |
+| `--as 2:0x82:1`、`0x321:0x6321:1` | `equip.c` の表の位置 `2 * 0x2000 + 0x0321` を、バンク `$82` と論理番地 `$6321` から求める形にした |
+
+- コードに新しく書いた数（一覧に出るだけ）：`0x1FFF` が 1 個（`equip.c` の `items & 0x1FFF`）。
+
+### 11.3 確かめたこと
+
+| 確かめたこと | 結果 |
+|---|---|
+| T1（11.2 の引数） | **OK** [C]。数字 123 個が、コードから消えて profile に入った（`--dim` 3、`--as` 2 を含む）。文字列は 0 |
+| T1 がわざと変えた値を見つけるか | 見つけた [C]：`walker_hpmax` `0x28E6` → `0x28E7`、`tile_bar_red` 507 → 508、`crc` の最後の桁、`ys2_items` の 18 → 19、`intro_skip` の 4000 → 4001 の 5 つ（それぞれ差 2 件）。確かめたあと、ファイルは元に戻した（`cmp` で同じ） |
+| `check_layers.py --pcerecomp external/PCERecomp` | **OK** [C] |
+| ビルド（`scripts/build.sh`） | 警告 0 [C] |
+| K4：装備の絵 | 新しい `pce_trace` で `tools/equip/equip_frames.py` を実行し直した `equip_frames.c` は、前のものとバイト単位で同じ（`cmp`、SHA-1 `4c4759d9…`）[C]。36 フレーム |
+| 試験の名前と本数 | 前と同じ 100 本 [C] |
+| `ctest -LE history -j 4 --repeat until-pass:2` | **90 本のうち 89 本合格、skip 1 本（`perf_ys`）、失敗 0**（1107 秒）[C]。やり直しになった試験はない。`app_prep_ys` は 1 回目で合格（142 秒）。実時間の試験も、しきい値を変えずに合格（K3） |
+| history（`scripts/build.sh --test-hist`） | **10 本すべて合格**、失敗 0 [C]（`motion_cave_ys`、`cd_pop_ys`、`crop_flash_ys`、`motion_intro2_ys`、`motion_light_ys`、`motion_save_ys`、`motion_ys`、`motion_temple_ys`、`gpu_window_ys`、`item_window_ys`）。`-j` はコア数の半分で、試験の時間の合計は約 734 秒、経過は約 3 分 |
+
+- 3A-4 で触れた値は、セッションの試験（`session_ys_*`）、HUD・枠の試験、装備の試験（`equip_*`）、イントロの試験（`intro_ys`、`app_tests` の
+  `INTRO_MAX_FRAMES`）、ランチャーの試験（`launcher`、`launcher_ys`）、history の滑らかな動き・鉱山の明かり・ウィンドウの試験で通っている。
+- 次に history を回すのは、3A-5 の後と 3A-7（3.2 のとおり）。
+- Windows での確認は 3A-7 でまとめて行う（Q9）。

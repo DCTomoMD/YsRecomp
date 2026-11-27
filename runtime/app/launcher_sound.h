@@ -23,11 +23,12 @@
 
 #include "app/launcher.h"
 #include "pce/mix.h"
+#include "profile/ys_profile.h"
 
 #define LAUNCHER_SFX_MAX 64
 #define LAUNCHER_RATE 44100
 
-extern const uint8_t launcher_sfx_numbers[3]; /* LAUNCHER_SFX_MOVE, _OK, _NO */
+#define launcher_sfx_numbers (g_ys_profile.launcher_sfx->numbers) /* uint8_t[3]: LAUNCHER_SFX_MOVE, _OK, _NO */
 
 /* Hidden console that records the effects */
 typedef struct LauncherCapture {

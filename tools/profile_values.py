@@ -15,11 +15,13 @@ for values written another way (review_jp/05, Q5 and chapter 4):
   --ram OFFSET:COUNT  a RAM address that left the code as an offset from $2000 (ram[OFFSET]) and entered the profile
                       as the CPU address OFFSET + 0x2000;
   --dim VALUE:COUNT   the size of a new array of the profile, holding values the code wrote one by one before (three
-                      comparisons become test_pc[3]): it entered the profile without leaving the code.
+                      comparisons become test_pc[3]): it entered the profile without leaving the code;
+  --as OLD:NEW:COUNT  any other value written another way: OLD left the code and NEW entered the profile (the code
+                      computes OLD from NEW; say how in the stage's notes).
 Numbers and strings that are new in the code are listed for review, not counted as errors.
 
 Usage: python tools/profile_values.py BASE [--allow VALUE:COUNT ...] [--new VALUE:COUNT ...] [--ram OFFSET:COUNT ...]
-                                           [--dim VALUE:COUNT ...] [--show]
+                                           [--dim VALUE:COUNT ...] [--as OLD:NEW:COUNT ...] [--show]
 Exit: 0 = the values match, 1 = some difference (listed), 2 = usage error.
 Reads no ROM: only the project's sources.
 """
@@ -127,6 +129,8 @@ def main():
                     help="a number written anew in the code, hiding a moved one (say why in the stage's notes)")
     ap.add_argument("--ram", action="append", default=[], metavar="OFFSET:COUNT",
                     help="a RAM offset from $2000 that entered the profile as the CPU address OFFSET + 0x2000")
+    ap.add_argument("--as", dest="as_", action="append", default=[], metavar="OLD:NEW:COUNT",
+                    help="a value written another way: OLD left the code, NEW entered the profile")
     ap.add_argument("--dim", action="append", default=[], metavar="VALUE:COUNT",
                     help="the size of a new profile array holding values the code wrote one by one")
     ap.add_argument("--show", action="store_true", help="also list every value that matched")
@@ -176,6 +180,16 @@ def main():
     # still negative: new in the code (listed for review, as before)
     left_n = Counter({v: c for v, c in left_n.items() if c > 0})
     left_n.update(dims)  # entered the profile with no literal in the code before
+    rewritten = 0
+    for item in a.as_:  # left as OLD, entered as NEW
+        old, new, c = (item.split(":") + ["1"])[:3]
+        old, new, c = c_int(old), c_int(new), int(c)
+        if c > left_n[old]:
+            problems.append(f"--as more than left the code: {old} (0x{old:X})")
+        left_n[old] -= c
+        left_n[new] += c
+        rewritten += c
+    left_n = Counter({v: c for v, c in left_n.items() if c > 0})
     for v in sorted(set(left_n) | set(entered_n)):
         if left_n[v] != entered_n[v]:
             problems.append(f"number {v} (0x{v:X}): left the code {left_n[v]} time(s), entered the profile "
@@ -209,7 +223,7 @@ def main():
     print(f"profile_values: base {a.base}")
     print(f"  numbers: {sum(left_n.values())} left the code (+{sum(allowed.values())} allowed; "
           f"{sum(written.values())} counted with --new, {sum(ram.values())} with --ram, "
-          f"{sum(dims.values())} with --dim), "
+          f"{sum(dims.values())} with --dim, {rewritten} with --as), "
           f"{sum(entered_n.values())} entered the profile")
     print(f"  strings: {sum(left_s.values())} left the code, {sum(entered_s.values())} entered the profile")
     if a.show:

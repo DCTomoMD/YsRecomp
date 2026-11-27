@@ -61,13 +61,14 @@ void ys_reward_hook(YsReward *r, Pce *pce)
     if (h < 0)
         return;
     const YsRewardProfile *p = g_ys_profile.reward;
+    const YsCommonRam *ram = g_ys_profile.common;
     if (h == YS_REWARD_KILL) {
         uint8_t w = RAM(pce, p->walker);
         r->open = 1;
         r->kills++;
         memset(&r->cur, 0, sizeof(r->cur));
         r->cur.walker = w;
-        r->cur.actor = w < YS_WALKERS ? RAM(pce, p->actor + w) : 0xFF;
+        r->cur.actor = w < YS_WALKERS ? RAM(pce, ram->walker_actor + w) : 0xFF;
         return;
     }
     if (!r->open) { /* event reward, paid by the area program (not an enemy death) */
@@ -76,12 +77,12 @@ void ys_reward_hook(YsReward *r, Pce *pce)
     }
     if (h == YS_REWARD_GOLD) {
         uint32_t now = (uint32_t)(pce->cpu.y | pce->cpu.a << 8);
-        uint32_t old = (uint32_t)(RAM(pce, p->gold) | RAM(pce, p->gold + 1) << 8);
+        uint32_t old = (uint32_t)(RAM(pce, ram->gold) | RAM(pce, ram->gold + 1) << 8);
         r->cur.gold = now > old ? now - old : 0;
         return;
     }
     uint32_t now = (uint32_t)(pce->cpu.y | pce->cpu.x << 8 | pce->cpu.a << 16);
-    uint32_t old = (uint32_t)(RAM(pce, p->exp) | RAM(pce, p->exp + 1) << 8 | RAM(pce, p->exp + 2) << 16);
+    uint32_t old = (uint32_t)(RAM(pce, ram->exp) | RAM(pce, ram->exp + 1) << 8 | RAM(pce, ram->exp + 2) << 16);
     r->cur.exp = now > old ? now - old : 0;
     r->open = 0;
     r->paid++;

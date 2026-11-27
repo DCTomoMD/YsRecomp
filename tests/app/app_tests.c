@@ -2035,8 +2035,8 @@ static void test_crop(const char *work)
                 bbig[i] = bp[(i / (CROP_W * 4) / 4) * CROP_W + (i % (CROP_W * 4)) / 4];
             /* The panel cells (Ys I: the H.P with the maximum, "/"; Ys II: without) */
             static YsPanel bpn;
-            static const int k_kind1[3] = { YS_TILE_H, YS_TILE_E, YS_TILE_G },
-                             k_kind2[4] = { YS_TILE_H, YS_TILE_M, YS_TILE_E, YS_TILE_G };
+            const int k_kind1[3] = { YS_TILE_H, YS_TILE_E, YS_TILE_G },
+                      k_kind2[4] = { YS_TILE_H, YS_TILE_M, YS_TILE_E, YS_TILE_G };
             int itv[4][4];
             for (int i = 0; i < n; i++) {
                 itv[i][0] = game == 1 ? k_ys1[i].l0 : k_ys2[i].l0;

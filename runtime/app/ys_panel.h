@@ -24,6 +24,8 @@
 #define PCE_APP_YS_PANEL_H
 #include <stdint.h>
 
+#include "profile/ys_profile.h"
+
 #define YS_PANEL_X 8    /* 1st column of the panel in the image (the frame's) */
 #define YS_PANEL_Y 179  /* 1st line of the panel in the image: the text's */
 #define YS_PANEL_ROWS 6 /* 8-line cells: text, outline, player bar, outline, enemy bar, outline */
@@ -33,19 +35,20 @@
 
 #define YS_TILE(e) ((e) & 0xFFF) /* background map word: palette << 12 | tile */
 #define YS_PAL(e) ((e) >> 12)
-#define YS_TILE_BLANK 256
-#define YS_TILE_LABEL_FIRST 257 /* label letters */
-#define YS_TILE_LABEL_LAST 266
-#define YS_TILE_H 257 /* 1st letter of each label: H.P, E(XP), G(OLD), M.P */
-#define YS_TILE_E 260
-#define YS_TILE_G 262
-#define YS_TILE_M 266
-#define YS_TILE_DIGIT_FIRST 449 /* 0-9, ":" (459) and "/" (460) */
-#define YS_TILE_DIGIT_LAST 460
-#define YS_TILE_SLASH 460
-#define YS_TILE_BAR_SIDE 282
-#define YS_TILE_BAR_YELLOW 506 /* 8 HP points left */
-#define YS_TILE_BAR_RED 507    /* 8 HP points lost */
+/* The fixed tiles of the panel: g_ys_profile.panel (not constants: no switch case or static initializer) */
+#define YS_TILE_BLANK (g_ys_profile.panel->tile_blank)
+#define YS_TILE_LABEL_FIRST (g_ys_profile.panel->tile_label_first) /* label letters */
+#define YS_TILE_LABEL_LAST (g_ys_profile.panel->tile_label_last)
+#define YS_TILE_H (g_ys_profile.panel->tile_h) /* 1st letter of each label: H.P, E(XP), G(OLD), M.P */
+#define YS_TILE_E (g_ys_profile.panel->tile_e)
+#define YS_TILE_G (g_ys_profile.panel->tile_g)
+#define YS_TILE_M (g_ys_profile.panel->tile_m)
+#define YS_TILE_DIGIT_FIRST (g_ys_profile.panel->tile_digit_first) /* 0-9, ":" and "/" */
+#define YS_TILE_DIGIT_LAST (g_ys_profile.panel->tile_digit_last)
+#define YS_TILE_SLASH (g_ys_profile.panel->tile_slash)
+#define YS_TILE_BAR_SIDE (g_ys_profile.panel->tile_bar_side)
+#define YS_TILE_BAR_YELLOW (g_ys_profile.panel->tile_bar_yellow) /* 8 HP points left */
+#define YS_TILE_BAR_RED (g_ys_profile.panel->tile_bar_red)       /* 8 HP points lost */
 #define YS_BAR_FIRST_COL 8     /* 1st inner cell of the bar (the left side is at 7) */
 
 typedef struct YsPanel {

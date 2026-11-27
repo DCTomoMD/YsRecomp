@@ -22,6 +22,8 @@
 
 #include <stdint.h>
 
+#include "profile/ys_profile.h"
+
 typedef enum IntroScreen {
     INTRO_SCREEN_LOADING,
     INTRO_SCREEN_NEC,
@@ -32,7 +34,7 @@ typedef enum IntroScreen {
 
 /* If the game does not get where it should by here (the screen it reports does not change: not this disc), give up and
  * show whatever is on screen. The intro reaches the menu well before (~2400). */
-#define INTRO_MAX_FRAMES 4000
+#define INTRO_MAX_FRAMES (g_ys_profile.intro_skip->max_frames)
 
 typedef struct IntroSkip {
     int enabled;

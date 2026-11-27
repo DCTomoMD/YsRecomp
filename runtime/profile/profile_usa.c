@@ -78,9 +78,13 @@ static const YsRewardProfile k_reward = {
     .hooks = k_reward_hooks,
     .hook_count = COUNT(k_reward_hooks),
     .walker = 0x2022,
-    .actor = 0x2736,
-    .gold = 0x2C41,
+};
+
+/* docs/ys_notes.md, "Engine memory map" */
+static const YsCommonRam k_common = {
+    .walker_actor = 0x2736,
     .exp = 0x2ABB,
+    .gold = 0x2C41,
 };
 
 /* docs/ys_notes.md, "The game's window system": routines of bank $81 of the CD RAM in the $6000-$7FFF window */
@@ -166,6 +170,108 @@ static const YsFadeProfile k_fade = {
     .colors = 0x3C00,
 };
 
+/* docs/ys_notes.md, "Engine memory map": routines of bank $80 of the CD RAM in the $4000-$5FFF window */
+static const YsEngineProfile k_engine = {
+    .bank = 0x80,
+    .hooks = {
+        /* start of the build: LDA #1 / EOR $2215 */
+        [YS_ENGINE_HOOK_START] = { 0x4D58, { 0xA9, 0x01, 0x4D, 0x15, 0x22 } },
+        /* a character (X): LDA $2F38,X / BIT #8 */
+        [YS_ENGINE_HOOK_ACTOR] = { 0x4DAC, { 0xBD, 0x38, 0x2F, 0x89, 0x08 } },
+        /* a piece (line already written): STY $0002 / STA $0003 */
+        [YS_ENGINE_HOOK_PIECE] = { 0x4E60, { 0x8C, 0x02, 0x00, 0x8D, 0x03 } },
+        /* end (after ex_sprdma): CLI / RTS */
+        [YS_ENGINE_HOOK_END] = { 0x4DAA, { 0x58, 0x60, 0xBD, 0x38, 0x2F } },
+    },
+    /* "Ys I mine light": $86:7108 (window $6000) LDX $7673 / LDA $2F78,Y / STA $2F78,X ... */
+    .copy_bank = 0x86,
+    .copy_pc = 0x7108,
+    .copy_sig = { 0xAE, 0x73, 0x76, 0xB9, 0x78, 0x2F },
+    .copy_light = 0x7673,
+    /* $75A5 in Ys I, $75A7 in Ys II (window $6000), with the new number in A: STA $76 / TAY / CLA / STA $2EF8,Y */
+    .hero_pc = { 0x75A5, 0x75A7 },
+    .hero_sig = { 0x85, 0x76, 0xA8, 0x62, 0x99, 0xF8, 0x2E },
+    .actor_x_lo = 0x2F78,
+    .actor_x_hi = 0x2FB8,
+    .actor_y_lo = 0x2FF8,
+    .actor_y_hi = 0x3038,
+    .actor_flags = 0x2F38,
+    .actor_pose = 0x2EF8,
+    .actor_state = 0x2EB6,
+    .camera_x = 0x2C33,
+    .camera_y = 0x2C35,
+    .walker_vel = 0x2A66,
+    .walker_acc = 0x2ADF,
+    .walker_left = 0x2B3F,
+    .walker_mask = 0x2B9F,
+    .walker_next = 0x2BCF,
+    .walker_hp = 0x2A36,
+    .walker_hpmax = 0x28E6,
+    .unit = 0x2092,
+    .front_base = 0x205F,
+    .front_count = 0x205D,
+    .front_attr = 0x2052,
+    .front_attr_bank = 0x2C52,
+    .front_bits = 0x2C55,
+    .front_bits_bank = 0x2C57,
+};
+
+/* docs/ys_notes.md, "Panel: the cells the game writes" (app/ys_panel.h); the same tiles in Ys I and Ys II */
+static const YsPanelProfile k_panel = {
+    .next_level = 0x2C4A,
+    .hp_max = 0x2C48,
+    .tile_blank = 256,
+    .tile_label_first = 257,
+    .tile_label_last = 266,
+    .tile_h = 257,
+    .tile_e = 260,
+    .tile_g = 262,
+    .tile_m = 266,
+    .tile_digit_first = 449,
+    .tile_digit_last = 460,
+    .tile_slash = 460,
+    .tile_bar_side = 282,
+    .tile_bar_yellow = 506,
+    .tile_bar_red = 507,
+};
+
+/* docs/ys_notes.md, "Equipment on Adol" */
+static const YsEquipProfile k_equip = {
+    .items_bank = 0x82,
+    .items = 0x6321,
+    .ys1_items = { 0, 5, 10, 15 },
+    .ys2_items = { 0, 6, 12, 18 },
+    .slots = 0x2C71,
+    .adol_pal = 13,
+    .ice_pal = 14,
+};
+
+/* app/menu_font.h: tiles 449-487 (0-9, ':', '/', A-C, a solid tile, D-Z) and 504 */
+static const YsMenuFontProfile k_menu_font = {
+    .first = 449,
+    .arrow = 504,
+    .crc = 0xAADA7A4Cu,
+};
+
+/* app/launcher_sound.c: frames measured without the BIOS with pce_trace --input; the tables reach the sound driver
+ * at about frame 3705 */
+static const YsLauncherSfxProfile k_launcher_sfx = {
+    .numbers = { 0x13, 0x12, 0x17 },
+    .fixed = { { 1644, 1650 }, { 1965, 1971 }, { 2487, 2496 } },
+    .first_pulse = 2560,
+    .pulse_every = 40,
+    .pulse_len = 6,
+    .max_frames = 7000,
+    .settle = 150,
+    .sfx_flags = 0x20E7,
+    .sfx_play_mask = 0x7F,
+};
+
+/* app/intro_skip.h: the intro reaches the menu at about frame 2400 */
+static const YsIntroSkipProfile k_intro_skip = {
+    .max_frames = 4000,
+};
+
 const YsProfile g_ys_profile = {
     .identity = &k_identity,
     .disc = &k_disc,
@@ -177,4 +283,11 @@ const YsProfile g_ys_profile = {
     .intro = &k_intro,
     .dialog = &k_dialog,
     .fade = &k_fade,
+    .common = &k_common,
+    .engine = &k_engine,
+    .panel = &k_panel,
+    .equip = &k_equip,
+    .menu_font = &k_menu_font,
+    .launcher_sfx = &k_launcher_sfx,
+    .intro_skip = &k_intro_skip,
 };

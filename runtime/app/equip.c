@@ -8,6 +8,7 @@
 
 #include "cd/cdrom.h"
 #include "pce/pce.h"
+#include "profile/ys_profile.h"
 
 /* VCE color (9 bits: green, red, blue) from r, g, b in 0 to 7 */
 #define C(r, g, b) ((int16_t)(((g) << 6) | ((r) << 3) | (b)))
@@ -522,7 +523,8 @@ int equip_ice_pose(int pose, const uint16_t *e)
 {
     /* drawings 10-1F: direction in bits 2-3; step in bits 0-1 (standing, step 1, standing, step 2) */
     static const uint8_t k_step[4] = { 0, 1, 0, 2 };
-    if (pose < 0x10 || pose > 0x1F || (e[3] & 0x0F) != 14 || (e[3] & 0x0100) || ((e[3] >> 12) & 3) != 1)
+    if (pose < 0x10 || pose > 0x1F || (e[3] & 0x0F) != g_ys_profile.equip->ice_pal || (e[3] & 0x0100) ||
+        ((e[3] >> 12) & 3) != 1)
         return -1;
     return ((pose >> 2) & 3) * 3 + k_step[pose & 3];
 }
@@ -579,14 +581,15 @@ void equip_read(const Pce *pce, EquipInfo *out)
     memset(out, 0, sizeof(*out));
     if (!pce->cd)
         return;
-    /* $82:6321: the 1st item of each type (Ys I: 0, 5, 10, 15; Ys II: 0, 6, 12, 18), in the CD RAM (bank $82 = 2) */
-    const uint8_t *t = &pce->cd->ram[2 * 0x2000 + 0x0321];
-    int game = t[0] == 0 && t[1] == 5 && t[2] == 10 && t[3] == 15   ? EQUIP_GAME_YS1
-               : t[0] == 0 && t[1] == 6 && t[2] == 12 && t[3] == 18 ? EQUIP_GAME_YS2
+    /* the 1st item of each type, in the CD RAM: tells Ys I and Ys II apart */
+    const YsEquipProfile *p = g_ys_profile.equip;
+    const uint8_t *t = &pce->cd->ram[(p->items_bank - 0x80) * 0x2000 + (p->items & 0x1FFF)];
+    int game = memcmp(t, p->ys1_items, sizeof(p->ys1_items)) == 0   ? EQUIP_GAME_YS1
+               : memcmp(t, p->ys2_items, sizeof(p->ys2_items)) == 0 ? EQUIP_GAME_YS2
                                                                     : EQUIP_GAME_NONE;
-    out->sword = pce->ram[0x2C71 - 0x2000];
-    out->shield = pce->ram[0x2C72 - 0x2000];
-    out->armor = pce->ram[0x2C73 - 0x2000];
+    out->sword = pce->ram[p->slots - 0x2000];
+    out->shield = pce->ram[p->slots + 1 - 0x2000];
+    out->armor = pce->ram[p->slots + 2 - 0x2000];
     const uint8_t v[3] = { out->sword, out->shield, out->armor };
     for (int k = 0; k < 3; k++)
         if (v[k] != 0xFF && v[k] >= equip_count(game, k))
@@ -594,7 +597,7 @@ void equip_read(const Pce *pce, EquipInfo *out)
     out->game = (uint8_t)game;
 }
 
-/* A palette (13 or 14) against the reference one */
+/* A palette (Adol's or the ice one) against the reference one */
 static void color_set(const uint16_t *ref, const YsFadeFrame *fade, int pal, EquipColorSet *out)
 {
     const uint16_t *cur = &fade->color[256 + pal * 16];
@@ -622,11 +625,11 @@ void equip_colors(const EquipTable *table, const YsFadeFrame *fade, EquipColors 
         return;
     EquipColorSet normal;
     memset(&normal, 0, sizeof(normal));
-    color_set(table->pal, fade, 13, &normal);
+    color_set(table->pal, fade, g_ys_profile.equip->adol_pal, &normal);
     out->kind = normal.kind;
     memcpy(out->map, normal.map, sizeof(out->map));
     out->flat = normal.flat;
-    color_set(table->ice_pal, fade, 14, &out->ice);
+    color_set(table->ice_pal, fade, g_ys_profile.equip->ice_pal, &out->ice);
 }
 
 int equip_frame_of(const EquipTable *table, const uint16_t *vram, const uint16_t *e)
@@ -647,12 +650,12 @@ const uint16_t *equip_sprite(Equip *q, const EquipInfo *info, const EquipColors 
 {
     if (!q || !q->table || info->game == EQUIP_GAME_NONE)
         return NULL;
-    /* The drawings are for palette 13, normal Adol's (the game swaps his shape for the Ys II monsters: the drawing
-     * is none of the 36 and he comes out as on the console), or 14 with drawings 10-1F, his on the ice (recognized by
-     * what the engine asks for, without looking at the pixels) */
-    int ice = (e[3] & 0x0F) == 14;
+    /* The drawings are for Adol's palette, normal Adol's (the game swaps his shape for the Ys II monsters: the drawing
+     * is none of the 36 and he comes out as on the console), or the ice one with drawings 10-1F, his on the ice
+     * (recognized by what the engine asks for, without looking at the pixels) */
+    int ice = (e[3] & 0x0F) == g_ys_profile.equip->ice_pal;
     int kind = ice ? colors->ice.kind : colors->kind;
-    if ((!ice && (e[3] & 0x0F) != 13) || kind == EQUIP_COLORS_NONE)
+    if ((!ice && (e[3] & 0x0F) != g_ys_profile.equip->adol_pal) || kind == EQUIP_COLORS_NONE)
         return NULL;
     int fi = ice ? equip_ice_pose(pose, e) : equip_frame_of(q->table, vram, e);
     if (fi < 0)

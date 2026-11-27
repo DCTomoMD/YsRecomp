@@ -4,6 +4,7 @@
 
 #include "app/redraw.h"
 #include "app/ys_fade.h"
+#include "profile/ys_profile.h"
 
 int fade_track(FadeTrack *t, int level, int max_d)
 {
@@ -62,9 +63,10 @@ void fade_palette(FadePalette *p, RedrawFrame *f, const YsFadeFrame *yf, int on)
     if (!on)
         return; /* f->rgb keeps the console's colors (redraw_capture) */
     memcpy(f->rgb, rgb, sizeof(rgb));
-    /* The equipment's direct colors: each level of Adol's sprite palette (13) as it is on screen */
+    /* The equipment's direct colors: each level of Adol's sprite palette as it is on screen */
     uint8_t seen[3][8] = { { 0 } };
-    for (int i = 256 + 13 * 16 + 1; i < 256 + 14 * 16; i++)
+    int adol = g_ys_profile.equip->adol_pal;
+    for (int i = 256 + adol * 16 + 1; i < 256 + (adol + 1) * 16; i++)
         for (int k = 0; k < 3; k++) {
             int l = (f->color[i] >> (3 * k)) & 7;
             if (!seen[k][l]) {

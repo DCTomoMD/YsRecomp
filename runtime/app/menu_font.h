@@ -15,11 +15,13 @@
 
 #include <stdint.h>
 
-#define MENU_FONT_FIRST 449 /* tiles 449-487 */
+#include "profile/ys_profile.h"
+
+#define MENU_FONT_FIRST (g_ys_profile.menu_font->first) /* the tiles: MENU_FONT_TILES from here */
 #define MENU_FONT_TILES 39
-#define MENU_FONT_ARROW 504
+#define MENU_FONT_ARROW (g_ys_profile.menu_font->arrow)
 #define MENU_FONT_WORDS ((MENU_FONT_TILES + 1) * 16) /* the 39 tiles and the little arrow */
-#define MENU_FONT_CRC 0xAADA7A4Cu /* CRC32 of the MENU_FONT_WORDS words (little-endian), checked in the game */
+#define MENU_FONT_CRC (g_ys_profile.menu_font->crc) /* CRC32 of the MENU_FONT_WORDS words (little-endian), checked in the game */
 
 /* Checks the tiles in VRAM (32768 words); if they are the game font's, copies them and returns 1 */
 int menu_font_capture(const uint16_t *vram);

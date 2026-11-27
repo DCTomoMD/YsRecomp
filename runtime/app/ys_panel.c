@@ -19,8 +19,10 @@ void ys_panel_read(const struct Pce *pce, YsPanel *p)
 {
     memset(p, 0, sizeof(*p));
     const uint8_t *ram = pce->ram; /* $2000- */
-    p->next_level = (uint32_t)ram[0x2C4A - 0x2000] | (uint32_t)ram[0x2C4B - 0x2000] << 8 | (uint32_t)ram[0x2C4C - 0x2000] << 16;
-    p->hp_max = ram[0x2C48 - 0x2000];
+    const YsPanelProfile *pp = g_ys_profile.panel;
+    p->next_level = (uint32_t)ram[pp->next_level - 0x2000] | (uint32_t)ram[pp->next_level + 1 - 0x2000] << 8 |
+                    (uint32_t)ram[pp->next_level + 2 - 0x2000] << 16;
+    p->hp_max = ram[pp->hp_max - 0x2000];
     int bxr = (ram[0x020E] | ram[0x020F] << 8) & 0x3FF, byr = (ram[0x0212] | ram[0x0213] << 8) & 0x1FF;
     int mwr = pce->vdc.reg[9];
     static const int k_bat_w[4] = { 32, 64, 128, 128 };
