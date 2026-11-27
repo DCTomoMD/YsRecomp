@@ -107,12 +107,13 @@ typedef struct { const YsHookRow *rows; int count; } YsHookSet;
 | `YsEquipProfile` | 装備表の位置（CD RAM）と、Ys I / II を見分ける先頭の並び、装備スロットの RAM、パレット番号 | `equip.c:22, 449-451, 525, 582-586, 650-655` |
 | `YsCropProfile` | 画面の幾何（枠、マップ、パネル、ロード画面）。両版で同じ可能性が高いが [A]、ディスク由来なので profile に置く | `crop.c:14-34`、`crop.h:78-89`、`tools/trace/hud_old.c:5-15` |
 | `YsMenuFontProfile` | フォントのタイル範囲、矢印タイル、CRC | `menu_font.h:18-22` |
-| `YsLauncherSfxProfile` | 効果音 ID 3 つ、RUN を押すフレームの窓、上限フレーム、音源ドライバの RAM | `launcher_sound.c:12, 17-31, 61-78` |
+| `YsLauncherSfxProfile` | 効果音 ID 3 つ、RUN を押すフレームの窓、上限フレーム、音源ドライバのフラグ `$20E7`（`$22D0/D1`・`$22E1/E2` は System Card の作業域なので入れない。`05` の Q3、2026-11-22 に決定） | `launcher_sound.c:12, 17-31, 61-78` |
 | `YsIntroSkipProfile` | イントロの上限フレーム | `intro_skip.h:35` |
 | `YsDiscIdentity` | トラック数、TOC の CRC、データの CRC、タイトル文字列とその位置（なければ NULL） | `disc_id.c:13-15, 104` |
 | `YsBiosPolicy` | BIOS の要否（6 章）、受け付ける BIOS の識別値（なければ NULL） | 新設 |
 | `YsIdentity` | `edition_id`（`"usa"` / `"jp"`）、`app_id`（書き込み先のフォルダ名など）、ウィンドウのタイトル、ini のファイル名、利用者向けの文言（ディスクの名前、フォルダ選択の見出し、エラー文） | `main.c:161, 182, 218-221, 2555, 485`、`disc_id.c:121-142`、`launcher.c:12` |
 | `YsTraceProfile` | トレース拡張だけが使う追加のフックと RAM、HUD の文字の対応（`"H.PEXGOLDM"`） | `tools/trace/ys_actors.c:12-22`、`ys_trace_ext.c:926, 1303-1304, 1374` |
+| `YsCommonRam`（3A-4 で追加） | 2 つ以上のモジュールが読む RAM：歩く者のキャラクター、EXP、GOLD（`ys_engine.c` と `ys_reward.c`。`05` の 11.1） | `ys_engine.c:177, 186-187`、`ys_reward.c` |
 
 ```c
 typedef struct {

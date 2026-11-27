@@ -258,6 +258,20 @@ natively on PC (Windows). The generated C mimics the CPU instruction by instruct
 - review_fable/、review_fable_final/：Fable の監査報告（Opus は上書きしない）
 - review_opus/：Fable の指摘の再検証と修正の記録
 
+## profile 層（Phase 3A、2026-11-28 に macOS で完了。Windows の確認は review_jp/05 の 14.4）
+- ディスクに由来する値と、版の名前・文言は `runtime/profile/` に置く：`ys_profile.h`（型と、コンパイル時の定数）と
+  `profile_usa.c`（`const YsProfile g_ys_profile`。北米版の値）。各モジュールは `g_ys_profile.<module>` を読み、版を尋ねない。
+  実行ファイルは profile をちょうど 1 つリンクする（`ys_profile_usa`。日本版の `profile_jp.c` は Phase 3B）。
+- サブ構造体：`identity`・`disc`・`music`・`screen`・`scroll`・`reward`・`windows`・`intro`・`dialog`・`fade`・`common`
+  （2 つ以上のモジュールが読む RAM）・`engine`・`panel`・`equip`・`menu_font`・`launcher_sfx`・`intro_skip`・`trace`
+  （`tools/trace/` だけが読む値）。RAM は CPU から見た番地（`0x2C41` の形）。2 バイト目以降は「先頭 + n」で読む。
+- 画面の幾何と配列の大きさは、`ys_profile.h` の末尾の定数（`YS_IMG_*` など）。両方の版で同じと仮定している [A]。
+- コードに残した値（System Card の作業域 `$2200-$22FF`、エンジンの特性、ハードウェアなど）と、日本版での確かめ方は
+  review_jp/05 の 14.2。
+- 値を移したら、T1 で同じことを確かめる：`.venv/bin/python tools/profile_values.py <直前のコミット> [--allow V:N] [--new V:N]
+  [--ram OFF:N] [--dim V:N] [--as OLD:NEW:N]`。引数ごとの理由を文書に書く（書き方は review_jp/05 の 10.2〜13.2）。
+  値をわざと変えると差として出ることも確かめる。
+
 ## ビルドと試験
 出典：review_jp/00_repository_inventory.md の 2 章、11 章、18 章（上流の README と build.ps1 から書き出したもの。未検証）。
 

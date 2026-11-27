@@ -1,7 +1,7 @@
 # Phase 3A 計画：profile の骨格と、北米版の値の移行（同一動作）
 
 - 作成日：2026-11-22。対象ブランチ：`feature/japanese-disc-support`（`3a09fd0`、PCERecomp はフォークの `76ab827`）。
-- **本書は計画である。** コード・CMake・試験は変更していない。実装は、5 章の質問への回答を得てから、段ごとに行う。
+- 状態（2026-11-28）：**3A-1〜3A-7 は macOS で完了**（8〜14 章）。残りは Windows での確認（14.4）。1〜7 章は計画のときの記述のまま。
 - 元にした文書：
   - `01_profile_design.md`：profile 層の設計（2〜5 章、9 章）。
   - `02_build_layout.md`：6 章の段階表と 7 章の B5。
@@ -595,3 +595,140 @@ T1 は全ファイルを合わせて数えるので、コードに新しく書�
 - 3A-6 で触れたのはトレースの道具だけ（`pce_trace`・`ys_trace`）。それを使う試験（`windows_ys`・`windows_ys1`・`panel_ys`・`dialog_ys`・
   `equip_*`・`session_ys_*` など）で通っている。history は 3.2 のとおり 3A-7 で回す（3A-6 はプレイヤーの実行ファイルの動作に触れない）。
 - Windows での確認は 3A-7 でまとめて行う（Q9）。
+
+---
+
+## 14. 3A-7：まとめ（2026-11-28、macOS）
+
+3A-1〜3A-6 のコミット：`6840786`（3A-1・3A-2）、`f2caa50`（3A-3）、`74019a8`（3A-4）、`8290eb3`（3A-5）、`e9a5a29`（3A-6）。
+3A-7 はコードを変えない（文書だけ）。3A の前の基準は `3956404`（本書の計画のコミット）。
+
+### 14.1 終了条件（1 章）
+
+| # | 結果 | 判定 |
+|---|---|---|
+| E1 | `runtime/profile/` に `ys_profile.h` と `profile_usa.c`。`g_ys_profile` を定義するのは `profile_usa.c:292` だけ（`grep`）。`ys_profile_usa` をリンクする実行ファイルは `pce_runtime`・`pce_trace`・`app_tests`・`equip_check`・`ys_trace`・`YsRecomp` の 6 つで、それぞれ 1 回だけ（`CMakeLists.txt:113, 121, 130`、`cmake/ys_edition.cmake:189, 198, 207`）。ほかの profile はまだない | 合格 [C] |
+| E2 | 段ごとの T1 は 6 回とも差 0（8.2、9.3、10.3、11.3、12.3、13.3）。3A の全体（`3956404` → `e9a5a29`）でも、段の引数を合わせ、14.3 の 2 つを足すと差 0 | 合格 [C] |
+| E3 | macOS：段ごとに 100 本、`-LE history` で 89 本合格・`perf_ys` skip・失敗 0。history は 3A-4・3A-5・3A-7 で 10 本合格（14.5）。期待値は変えていない（`app_tests.c` は 3A-4 で表 1 つの `static` を外しただけ、11.1）。**Windows は 14.4 の手順で確かめる（未実施）** | macOS は合格 [C]、Windows は待ち |
+| E4 | `tools/check_layers.py --pcerecomp external/PCERecomp`（試験 `host_layers`）が段ごとに OK。規則 6（profile から `app/`・`host/`・SDL を include しない）と規則 7（版の分岐を書かない）を 3A-1 で足した | 合格 [C] |
+| E5 | 規則 7 が `runtime/app/`・`main.c`・`tools/trace/` で版の分岐がないことを確かめている。3A で足したコードにも `#ifdef` や `edition_id` の比較はない | 合格 [C] |
+| E6 | サブモジュールの指す先は `3956404` と同じ `76ab827`（`git ls-tree`）。`external/PCERecomp` の作業ツリーに変更はない | 合格 [C] |
+| E7 | 14.2 の表 | 合格 [C] |
+
+### 14.2 コードに残したディスク由来の値（E7）
+
+日本版（3B 以降）で確かめるための一覧。「確かめ方」は、日本版のディスクと System Card 3.0 で何を見ればよいか。
+
+| 種類 | 値と場所 | 残した理由 | 日本版での確かめ方 |
+|---|---|---|---|
+| System Card の作業域（Q3） | `$2216`（`ys_engine.c`、`tools/trace/ys_actors.c`）、`$220E/0F`・`$2212/13`（`ys_scroll.c`、`ys_panel.c`）、`$221F`・`$2220`・`$2222`（`ys_fade.c`）、`$22D0/D1`・`$22E1/E2`（`launcher_sound.c`）、`$2241`（`ys_actors.c`） | 番地はディスクではなく System Card 2.0 に由来する [C] | System Card 3.0 で同じ意味か（`04` の J10。`03` の 8.6 では、作業域を使う命令の数が一部違う） |
+| エンジンの特性（Q8） | `YS_ACTORS` 64、`YS_WALKERS` 48、`YS_NO_ACTOR` 0xFF、状態 `0x50`（`ys_engine.h`）、`ys_masks.c`・`.h` の規則（フラグ `0x20`・`0x08`・`&0x27 == 0x22`、ポーズの範囲、足の位置 `y + 8 + 24`、`YS_MASK_H` 32）、`MOTION_STEP` 8（`motion.h`）、`motion.c`・`battle.c` のフラグ（2.3）、`RING` 256（`motion.c:15`、`gpu_draw.c:15`、`redraw.h`）、`RING_X` 512・`RING_Y` 256（`battle.c:16-17`）、マップ 64×32（`game_fixes.c`、`ys_windows.c` の `set_bat`・`ys_windows_cells`）、ウィンドウのスプライトのフラグ `0x20`（`ys_windows.c`）、`MENU_CHIP_RET` 0x3FFE（`menu_chip.c:7`） | 両作に共通のエンジンの性質と見ている [A] | Phase 2 の残りで、日本版のエンジンの表と命令を読む。違えば profile に移す |
+| 画面の幾何と配列の大きさ（Q2） | `YS_IMG_*`、`YS_PANEL_ROWS/COLS`、`YS_BAR_FIRST_COL`、`YS_EQUIP_FRAMES/W/H`、`YS_MENU_FONT_TILES`（`ys_profile.h` の末尾、3A-5） | コンパイル時の定数。両方の版で同じと仮定 [A] | `01` の U12。日本版の画面（枠・パネル・ロード画面）を測る。違えば profile の構造体に移す |
+| 配列の大きさ（ほか） | 色の RAM の大きさ `0x400`（`YsFade.ram[512]`）、前景の表 256（`YsFront`）、フェードの表 8×8 | 配列の大きさ。ゲームの表の形でもある [A] | 日本版のフェードの表と前景の表の大きさ |
+| 文字とタイルの対応 | `menu_font.c:176-179`（`:` 10、`/` 11、A〜C 12、D〜Z 16 から） | 北米版のフォントの並び。日本版はフォントが違う見込み [A] | 3B のフォントの扱い（`04` の計画）で決める |
+| 装備の絵 | `equip.c` のポーズ `$10`〜`$1F` と、絵から導いた値（約 50）、何もないを表す `0xFF` | 絵の側の値（`01` の 3.3 でも絵の側） | 日本版の Adol の絵とポーズ |
+| 効果音を切り出す規則 | `launcher_sound.c` の `CAP_SFX_MAX` 240、`CAP_SFX_QUIET` 20、無音の判定 8、次の効果音までの 30 | 音を切り出す一般の規則で、ディスクの中身ではない [A] | 日本版の効果音の長さ |
+| `--launcher-wav` の効果音の範囲 | `main.c:2370` の付近 | 開発用の道具（2.3） | 3B で道具を使うとき |
+| ハードウェア | CD RAM のバンク `$80`〜`$87`、RAM のバンク `$F8`、スタックのページ `$100`、色のマスク `$1FF`、VCE の 512 色、SAT の差 `0x20`・`0x58`（32・88）、タイルの 8 ピクセル、1 行 1365 サイクル、1 フレーム 735 標本 | 版によらない [C] | 不要 |
+| PC の側の決めごと | `crop.c` の `LOAD_MID_Y` 37・`FRAME_BELOW` 4、`CROP_FRAME_VIEW_H` 213、`CROP_HUD_*`・`CROP_BAND_*`、`tools/trace/ys_actors.c` の行の区切り 132・210・263 | ディスクの値ではない | 不要（日本版の幾何が違えば見直す） |
+| ファイル名と作品名 | `menu_font.bin`・`launcher_sfx.bin`（`01` の P4）、`launcher.c:12-14` の作品名と発売年（`01` の P11） | 版で変わらないと決めてある | 不要 |
+
+### 14.3 T1：3A の全体
+
+段の引数（9.2 を `--new 1:7` に直したもの、10.2、11.2、12.2、13.2）を合わせて、基準 `3956404` で実行した：
+
+- 差は 2 つだけ出た。どちらも 3A-1・3A-2 でコードに新しく書いた数で、その段では「一覧に出るだけ」だった。全体で数えると、
+  あとの段で移した同じ数を隠すので、`--new` で数える：`--new 256:2`（`main.c` の `char title[256]` 2 つ）、`--new 0xFFFF:1`（`ys_reward.c` の `g_pc_min = 0xFFFF`）。
+- これを足すと **OK** [C]。数字 521 個が、コードから消えて profile に入った（`--ram` 5、`--dim` 7、`--as` 2 を含む）。
+  文字列 12 個がコードから消え、profile の 9 個の文字列と、それを入れる書式で元と同じになる。
+
+### 14.4 Windows での 3A 全体の確認手順（Q9）
+
+M3 と同じ実機（`review_portability/11_m3_summary.md` の 5 章と同じ形）。`reference/` と `gg_trace.exe` は M3-8 で入れたものをそのまま使う。
+
+- before：`3956404`（3A-1 の直前）。サブモジュールは `76ab827`。
+- after：`feature/japanese-disc-support` の先頭（本書のコミットを含む）。サブモジュールは同じ `76ab827`。
+- 所要時間：1 時間半ほど（生成 C を含むビルド 2 回、全試験 2 回、history 2 回）。
+
+#### 14.4.1 before（`3956404`）
+
+```powershell
+cd C:\work\YsRecomp
+$env:Path = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;" + $env:Path
+git fetch; git checkout 3956404; git submodule update
+git log --oneline -1; git -C external/PCERecomp log --oneline -1      # -> 3956404 / 76ab827
+Remove-Item -Recurse -Force build
+.\build.ps1 *> p3a_before_build.txt
+ctest --test-dir build -C Release -N | Select-String "Total Tests"     # -> 100
+ctest --test-dir build -C Release -N | Select-String "Test +#" | ForEach-Object { ($_ -split '\s+')[3] } | Set-Content p3a_before_names.txt
+ctest --test-dir build -C Release -LE history -j 2 --repeat until-pass:2 *> p3a_before_testall.txt
+ctest --test-dir build -C Release -L history *> p3a_before_hist.txt
+.\build.ps1 -Package *> p3a_before_package.txt
+python -c "import zipfile;[print(i.filename,i.file_size) for i in zipfile.ZipFile('dist/YsRecomp.zip').infolist()]" *> p3a_before_zip.txt
+```
+
+#### 14.4.2 after（ブランチの先頭）
+
+```powershell
+git checkout feature/japanese-disc-support; git pull
+git submodule sync; git submodule update
+git log --oneline -1; git -C external/PCERecomp log --oneline -1      # -> the branch tip / 76ab827
+Remove-Item -Recurse -Force build
+.\build.ps1 *> p3a_after_build.txt
+ctest --test-dir build -C Release -N | Select-String "Total Tests"     # -> 100
+ctest --test-dir build -C Release -N | Select-String "Test +#" | ForEach-Object { ($_ -split '\s+')[3] } | Set-Content p3a_after_names.txt
+Compare-Object (Get-Content p3a_before_names.txt) (Get-Content p3a_after_names.txt)
+ctest --test-dir build -C Release -LE history -j 2 --repeat until-pass:2 *> p3a_after_testall.txt
+ctest --test-dir build -C Release -L history *> p3a_after_hist.txt
+.\build.ps1 -Package *> p3a_after_package.txt
+python -c "import zipfile;[print(i.filename,i.file_size) for i in zipfile.ZipFile('dist/YsRecomp.zip').infolist()]" *> p3a_after_zip.txt
+Compare-Object (Get-Content p3a_before_zip.txt) (Get-Content p3a_after_zip.txt)
+python tools\profile_values.py 6840786 --allow 1:2 --allow 3:3 --allow 4:1 --allow 0x30:1 --allow 0x80:1 --allow 0x2C2F:1 --allow 0x2C30:2 --allow 0x2C42:1 --allow 0x2ABC:1 --allow 0x2ABD:1 --allow 0x4AD8:1 --allow 0x4B05:1 --allow 0x707C:1 --allow 0x7998:1 --new 0:3 --new 1:7 --new 2:1 *> p3a_after_t1.txt
+git status --short
+```
+
+- 最後から 2 行目は、T1 の道具が Windows の Python でも動くことの確かめ（W8）。基準 `6840786` は 3A-1・3A-2 のコミットで、
+  その後の段の値を数えるので、**差が出るのが正しい**（`DIFFERENCE` の行が出て、終わりが `profile_values: N difference(s)`）。
+  見るのは、道具が最後まで動いて `profile_values:` の行を 2 つ出すことだけ。
+
+#### 14.4.3 まとめ（貼るためのファイル 2 つ）
+
+```powershell
+Select-String -Path p3a_*.txt -Pattern "warning|tests passed|\*\*\*Failed|Not Run|Skipped|Total Tests|Total Test time|missing in the|Package|Zip|Built|profile_values:" |
+  ForEach-Object { "$($_.Filename): $($_.Line.Trim())" } | Set-Content -Encoding utf8 p3a_results.txt
+Select-String -Path p3a_after_testall.txt, p3a_after_hist.txt -Pattern "Test +#\d+:" |
+  ForEach-Object { $_.Line.Trim() } | Set-Content -Encoding utf8 p3a_after_tests.txt
+```
+
+#### 14.4.4 チェックポイント
+
+| ID | 確かめること | 元 |
+|---|---|---|
+| W1 | before・after とも `Built.`。`Total Tests` がどちらも 100。名前の `Compare-Object` は何も出ない | E3 |
+| W2 | `p3a_after_build.txt` に `warning` の行がない（MSVC は Apple Clang と警告が違うので、profile を読む新しいコードの型の変換が出ないか） | E3 |
+| W3 | history 以外：before・after とも 90 本で、skip は `perf_ys` の 1 本だけ、失敗 0（`session_ys_*`・`windows_*`・`equip_*`・`intro_ys`・`dialog_ys`・`panel_ys`・`launcher_ys`・`host_layers` が合格） | E3、E4 |
+| W4 | `app_prep_ys` が合格。`***Failed` の行があれば（2 回目で合格していても）、その行と `missing in the` の後の記録を貼る | K5 |
+| W5 | history：before・after とも 10 本合格 | E3 |
+| W6 | `app_package_ys`・`app_launcher_ys` が合格。zip の `Compare-Object` は何も出ないか、`YsRecomp.exe` の大きさの行だけ | E3 |
+| W7 | `git status --short` に、`??` のログ以外が出ない | E6 |
+| W8 | `p3a_after_t1.txt` に `profile_values: base 6840786` と `profile_values: ... difference(s)` の 2 行がある（Python の例外が出ていない） | T1 |
+
+#### 14.4.5 貼っていただくもの
+
+`p3a_results.txt` の中身、`p3a_after_tests.txt` の中身、2 つの `Compare-Object` の出力、`git status --short` の出力。
+
+### 14.5 macOS で確かめたこと（3A-7）
+
+| 確かめたこと | 結果 |
+|---|---|
+| コード | 3A-6 のコミット `e9a5a29` から変えていない（3A-7 は `review_jp/05`・`01`、CLAUDE.md だけ） |
+| T1（3A の全体、14.3） | **OK** [C] |
+| `check_layers.py --pcerecomp external/PCERecomp` | **OK** [C] |
+| ビルド（`scripts/build.sh`） | 警告 0 [C] |
+| `ctest -LE history -j 4 --repeat until-pass:2` | **90 本のうち 89 本合格、skip 1 本（`perf_ys`）、失敗 0**（1309 秒）[C]。やり直しになった試験はない。`app_prep_ys` は 1 回目で合格（139 秒） |
+| history（`scripts/build.sh --test-hist`） | **10 本すべて合格**、失敗 0 [C] |
+
+- `01_profile_design.md` の 3.3 の表を 2 行直した：`YsLauncherSfxProfile` から System Card の作業域の RAM を外した（Q3 の決定。`$20E7` だけ入れた）。
+  `YsCommonRam`（3A-4 で足した）の行を足した。
+- 3B に残るもの（7 章のとおり）：`profile_jp.c`、`profile_report.c`、NULL による機能の無効化、`YsIandII_JP`、BIOS の流れ、`edition_id`。
+  `04` の「`05_jp_disabled_features.md`」は `06` に直す（本書が 05 を使うため。冒頭の注）。
