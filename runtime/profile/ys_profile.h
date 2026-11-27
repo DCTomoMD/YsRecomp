@@ -243,6 +243,20 @@ typedef struct YsIntroSkipProfile {
     int32_t max_frames;
 } YsIntroSkipProfile;
 
+/* tools/trace (ys_actors.c, ys_trace_ext.c): what only the trace tools read; the rest they share with the modules above
+ * (order of hooks[] = the YS_TRACE_HOOK_* values, after the engine's own hooks) */
+enum { YS_TRACE_HOOK_WAIT, YS_TRACE_HOOK_VBLANK, YS_TRACE_HOOKS };
+typedef struct YsTraceProfile {
+    YsEngineHook hooks[YS_TRACE_HOOKS]; /* engine routines, in the engine's bank and window */
+    uint16_t first_actor; /* 1st character of the build */
+    uint16_t piece;       /* pointer to the piece being written (16 bits, low byte first) */
+    uint16_t vbl_flags;   /* its bit vbl_copy: the game's VBlank copied the camera */
+    uint8_t vbl_copy;
+    uint16_t hp;          /* the player's H.P (16 bits, low byte first) */
+    const char *label_chars; /* the panel's label tiles from YsPanelProfile.tile_label_first, as text */
+    const char *digit_chars; /* its digit tiles from tile_digit_first, as text */
+} YsTraceProfile;
+
 typedef struct YsProfile {
     const YsIdentity *identity;
     const YsDiscIdentity *disc;
@@ -261,6 +275,7 @@ typedef struct YsProfile {
     const YsMenuFontProfile *menu_font;
     const YsLauncherSfxProfile *launcher_sfx;
     const YsIntroSkipProfile *intro_skip;
+    const YsTraceProfile *trace;
 } YsProfile;
 
 extern const YsProfile g_ys_profile;

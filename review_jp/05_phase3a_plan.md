@@ -538,3 +538,60 @@ T1 は全ファイルを合わせて数えるので、コードに新しく書�
   `hud_old.c` を使う `--crop-log` の試験（`save_window_ring_ys`、`crop_flash_ys`、`equipment_ys` ほか）、history の滑らかな動き・切り抜きの試験で通っている。
 - 次に history を回すのは 3A-7（3.2 のとおり）。
 - Windows での確認は 3A-7 でまとめて行う（Q9）。
+
+---
+
+## 13. 3A-6 の結果（2026-11-28、macOS）
+
+基準は `8290eb3`（3A-5 のコミット）。Q4 のとおり、トレースの拡張も `g_ys_profile` を読み、`tools/trace/` の写し（2.5）をなくした。
+トレースだけが読む値は `YsTraceProfile`（`g_ys_profile.trace`）に入れた。
+
+### 13.1 変えたもの
+
+| ファイル | 内容 |
+|---|---|
+| `runtime/profile/ys_profile.h`・`profile_usa.c` | `YsTraceProfile`（と `YS_TRACE_HOOK_*`）：トレースだけのフック 2 行（次のフレームを待つ終わり `$4B1B`、VBlank `$4AA3`）、組み立ての最初のキャラクター `$2E4A`、書いている部品のポインタ `$2010`、VBlank のフラグ `$2080` の bit `$02`、プレイヤーの H.P `$2C43`、パネルのタイルを文字にする 2 つの文字列。`YsProfile` に `trace` を足した |
+| `tools/trace/ys_actors.c` | エンジンのフック 4 行（`ys_engine.c:16-19` とまったく同じ写し）をやめ、`g_ys_profile.engine->hooks` と `g_ys_profile.trace->hooks` を引く。表の順（START、ACTOR、PIECE、END、WAIT、VBLANK）は前と同じ。窓 2 の範囲 `0x4000`〜`0x6000`（`ys_actors.c:39`）は、2 つの表の最小値と最大値から計算する形にした（3A-4 の `ys_engine.c` と同じ）。キャラクターの表とリストのカメラは `g_ys_profile.engine` から |
+| `tools/trace/ys_trace_ext.c` | ウィンドウの数 `$3E`（`windows->count`）、Adol のパレット 13 の 3 か所（`equip->adol_pal`。`0x8D` は「前に出る bit `0x80` | パレット」なので `0x80 | adol_pal`）、`--panel-log` の EXP・GOLD（`common`）、次のレベル・最大 H.P（`panel`）、H.P（`trace->hp`）、パネルの文字（`trace->label_chars`・`digit_chars`）、会話の速さ `$27F6`（`dialog->speed`）と比べる値 `$92`（`engine->unit` と同じ `$2092`。会話の命令列の `SBC $92`） |
+
+- `$2241`（`ys_actors.c` の待ちのフック。System Card の作業域）と `$2216`（部品の数）はコードに残した（Q3）。
+- 行の数の区切り（132、210、263）、スプライトの SAT の差 `0x58`・`0x20`、VCE の 1 行 1365 サイクル、`YS_SLOTS` 64 はハードウェアか解析の区切りなので、コードに残した。
+- `hud_old.c` の写しは 3A-5 でなくした。2.5 の表の写しは、これで 7 行すべてなくなった。
+
+### 13.2 T1 の引数と理由
+
+3A-6 の引数（基準 `8290eb3`）：
+
+| 引数 | 理由 |
+|---|---|
+| `--allow 0x4D58:1`、`0x4DAC:1`、`0x4E60:1`、`0x4DAA:1` と、シグネチャの 20 バイト（`0xA9`、`0x01`、`0x4D`、`0x15`、`0x22`、`0xBD:2`、`0x38:2`、`0x2F:2`、`0x89`、`0x08`、`0x8C`、`0x02`、`0x00`、`0x8D`、`0x03`、`0x58`、`0x60`） | `ys_actors.c` のエンジンのフック 4 行の写し。値は 3A-4 から `YsEngineProfile` にある |
+| `--allow 0x8D` の 2 個目 | `ys_trace_ext.c` の `== 0x8D` を `0x80 | adol_pal` にした |
+| `--allow 5:2` | 写しの表の `sig[5]` とループの上限 `k < 5`（`sizeof` にした） |
+| `--allow 0x4000:1`、`0x6000:1` | 窓 2 の範囲を、表から計算する形にした |
+| `--allow 0x2EF8:1`、`0x2F38:1`、`0x2F78:1`、`0x2FB8:1`、`0x2FF8:1`、`0x3038:1`、`0x2C33:1`、`0x2C34:1`、`0x2C35:1`、`0x2C36:1` | キャラクターの表とカメラの写し（`YsEngineProfile`） |
+| `--allow 0x2011:1` | 部品のポインタの上のバイトを「`piece` + 1」にした |
+| `--allow 13:2` | パレット 13 の写し（`YsEquipProfile.adol_pal`） |
+| `--allow 0x3E:1`、`0x92:1`、`0x27F6:1` | ウィンドウの数・`$2092`・会話の速さの写し（`$2000` からの差で書いていたもの 2 つを含む） |
+| `--allow 0xABB:1`、`0xABC:1`、`0xABD:1`、`0xC41:1`、`0xC42:1`、`0xC44:1`、`0xC48:1`、`0xC49:1`、`0xC4A:1`、`0xC4B:1`、`0xC4C:1` | `--panel-log` の EXP・GOLD・次のレベル・最大 H.P の写しと、H.P の上のバイト（`$2000` からの差で書いていた） |
+| `--ram 0xC43:1` | H.P は profile に初めて入る値：差 `0xC43` を CPU の番地 `0x2C43` に直した |
+| `--new 1:10` | `ys_actors.c` の 5（`h = 1`、`g_pc_range = 1`、`piece + 1`、カメラの `+ 1` 2 つ）と、`ys_trace_ext.c` の 5（EXP・次のレベル・H.P・最大 H.P・GOLD の `+ 1`） |
+| `--new 2:2` | `ys_trace_ext.c` の EXP と次のレベルの `+ 2` |
+
+- コードに新しく書いた数（一覧に出るだけ）：`0x2000` が 3 個（`--panel-log` の `R` マクロ、ウィンドウの数と `$2092` の `- 0x2000`）。
+- 文字列 2 つ（`"H.PEXGOLDM"`、`"0123456789:/"`）は、コードから消えて、同じ文字列のまま profile に入った。
+
+### 13.3 確かめたこと
+
+| 確かめたこと | 結果 |
+|---|---|
+| T1（13.2 の引数） | **OK** [C]。数字 17 個と文字列 2 個が、コードから消えて profile に入った（`--ram` 1 を含む） |
+| T1 がわざと変えた値を見つけるか | 見つけた [C]：待ちのフックの PC `0x4B1B` → `0x4B1C`、`hp` `0x2C43` → `0x2C44`、`label_chars` の最後の文字の 3 つ（それぞれ差 2 件）。確かめたあと、ファイルは元に戻した（`cmp` で同じ） |
+| `check_layers.py --pcerecomp external/PCERecomp` | **OK** [C] |
+| ビルド（`scripts/build.sh`） | 警告 0 [C] |
+| K4：装備の絵 | 新しい `pce_trace` で作り直した `equip_frames.c` は、前のものとバイト単位で同じ（`cmp`、SHA-1 `4c4759d9…`、36 フレーム）[C] |
+| 試験の名前と本数 | 前と同じ 100 本 [C] |
+| `ctest -LE history -j 4 --repeat until-pass:2` | **90 本のうち 89 本合格、skip 1 本（`perf_ys`）、失敗 0**（1109 秒）[C]。やり直しになった試験はない。`app_prep_ys` は 1 回目で合格（142 秒）。実時間の試験も、しきい値を変えずに合格（K3） |
+
+- 3A-6 で触れたのはトレースの道具だけ（`pce_trace`・`ys_trace`）。それを使う試験（`windows_ys`・`windows_ys1`・`panel_ys`・`dialog_ys`・
+  `equip_*`・`session_ys_*` など）で通っている。history は 3.2 のとおり 3A-7 で回す（3A-6 はプレイヤーの実行ファイルの動作に触れない）。
+- Windows での確認は 3A-7 でまとめて行う（Q9）。

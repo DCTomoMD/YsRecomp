@@ -3,24 +3,29 @@
 
 #include <string.h>
 
+#include "profile/ys_profile.h"
+
 YsActors *g_ys_actors;
 
 /* Console RAM ($2000-$3FFF) */
 #define RAM(p, a) ((p)->ram[(a) - 0x2000])
 
-/* Engine routines (bank $80 of the CD RAM in the $4000-$5FFF window) and the first bytes of each */
-static const struct {
-    uint16_t pc;
-    uint8_t sig[5];
-} k_hooks[] = {
-    { 0x4D58, { 0xA9, 0x01, 0x4D, 0x15, 0x22 } }, /* start of the build: LDA #1 / EOR $2215 */
-    { 0x4DAC, { 0xBD, 0x38, 0x2F, 0x89, 0x08 } }, /* a character (X): LDA $2F38,X / BIT #8 */
-    { 0x4E60, { 0x8C, 0x02, 0x00, 0x8D, 0x03 } }, /* a piece (line already written): STY $0002 / STA $0003 */
-    { 0x4DAA, { 0x58, 0x60, 0xBD, 0x38, 0x2F } }, /* end (after ex_sprdma): CLI / RTS */
-    { 0x4B1B, { 0xAD, 0x41, 0x22, 0x8D, 0x12 } }, /* end of the wait for the next frame: LDA $2241 */
-    { 0x4AA3, { 0x1F, 0x80, 0x14, 0x17, 0x80 } }, /* VBlank: copies the camera of the finished list to the scroll */
+/* Engine routines and the first bytes of each: the engine's own (g_ys_profile.engine, the same as app/ys_engine.c),
+ * then the ones only the trace reads (g_ys_profile.trace) */
+enum {
+    HOOK_START = YS_ENGINE_HOOK_START,
+    HOOK_ACTOR = YS_ENGINE_HOOK_ACTOR,
+    HOOK_PIECE = YS_ENGINE_HOOK_PIECE,
+    HOOK_END = YS_ENGINE_HOOK_END,
+    HOOK_WAIT = YS_ENGINE_HOOKS + YS_TRACE_HOOK_WAIT,
+    HOOK_VBLANK = YS_ENGINE_HOOKS + YS_TRACE_HOOK_VBLANK,
+    HOOKS = YS_ENGINE_HOOKS + YS_TRACE_HOOKS
 };
-enum { HOOK_START, HOOK_ACTOR, HOOK_PIECE, HOOK_END, HOOK_WAIT, HOOK_VBLANK };
+
+static const YsEngineHook *hook(int h)
+{
+    return h < YS_ENGINE_HOOKS ? &g_ys_profile.engine->hooks[h] : &g_ys_profile.trace->hooks[h - YS_ENGINE_HOOKS];
+}
 
 static uint8_t read_logical(Pce *pce, uint16_t addr)
 {
@@ -33,16 +38,35 @@ static int vce_line(const Pce *pce)
     return pce->vce.vpos + (int)((pce->vce.hpos + pce->video_pending) / 1365);
 }
 
+/* Lowest and highest PC of the hooks: a quick test before the table (computed once from the profile) */
+static uint16_t g_pc_min, g_pc_max;
+static int g_pc_range;
+
+static void pc_range(void)
+{
+    g_pc_min = g_pc_max = hook(0)->pc;
+    for (int h = 1; h < HOOKS; h++) {
+        if (hook(h)->pc < g_pc_min)
+            g_pc_min = hook(h)->pc;
+        if (hook(h)->pc > g_pc_max)
+            g_pc_max = hook(h)->pc;
+    }
+    g_pc_range = 1;
+}
+
 static int which_hook(Pce *pce)
 {
     uint16_t pc = pce->cpu.pc;
-    if (pc < 0x4000 || pc >= 0x6000 || pce->cpu.mpr[2] != 0x80)
+    if (!g_pc_range)
+        pc_range();
+    if (pc < g_pc_min || pc > g_pc_max || pce->cpu.mpr[2] != g_ys_profile.engine->bank)
         return -1;
-    for (int h = 0; h < (int)(sizeof(k_hooks) / sizeof(k_hooks[0])); h++) {
-        if (k_hooks[h].pc != pc)
+    for (int h = 0; h < HOOKS; h++) {
+        const YsEngineHook *k_h = hook(h);
+        if (k_h->pc != pc)
             continue;
-        for (int k = 0; k < 5; k++)
-            if (read_logical(pce, (uint16_t)(pc + k)) != k_hooks[h].sig[k])
+        for (int k = 0; k < (int)sizeof(k_h->sig); k++)
+            if (read_logical(pce, (uint16_t)(pc + k)) != k_h->sig[k])
                 return -1;
         return h;
     }
@@ -87,12 +111,14 @@ void ys_actors_hook(Pce *pce, int after)
     int h = which_hook(pce);
     if (h < 0)
         return;
+    const YsEngineProfile *ep = g_ys_profile.engine;
+    const YsTraceProfile *tp = g_ys_profile.trace;
     YsBuild *b = &ya->cur;
     switch (h) {
     case HOOK_START:
         memset(b, 0, sizeof(*b));
         memset(b->owner, YS_NO_OWNER, sizeof(b->owner));
-        b->first = RAM(pce, 0x2E4A);
+        b->first = RAM(pce, tp->first_actor);
         ya->building = 1;
         ya->cur_actor = YS_NO_OWNER;
         break;
@@ -103,17 +129,17 @@ void ys_actors_hook(Pce *pce, int after)
         ya->cur_actor = x;
         if (b->actors < YS_SLOTS)
             b->order[b->actors++] = (uint8_t)x;
-        b->ax[x] = (int16_t)(RAM(pce, 0x2F78 + x) | RAM(pce, 0x2FB8 + x) << 8);
-        b->ay[x] = (int16_t)(RAM(pce, 0x2FF8 + x) | RAM(pce, 0x3038 + x) << 8);
-        b->pose[x] = RAM(pce, 0x2EF8 + x);
-        b->flags[x] = RAM(pce, 0x2F38 + x);
+        b->ax[x] = (int16_t)(RAM(pce, ep->actor_x_lo + x) | RAM(pce, ep->actor_x_hi + x) << 8);
+        b->ay[x] = (int16_t)(RAM(pce, ep->actor_y_lo + x) | RAM(pce, ep->actor_y_hi + x) << 8);
+        b->pose[x] = RAM(pce, ep->actor_pose + x);
+        b->flags[x] = RAM(pce, ep->actor_flags + x);
         break;
     }
     case HOOK_PIECE: {
         int slot = RAM(pce, 0x2216);
         if (!ya->building || slot >= YS_SLOTS)
             break;
-        uint16_t ptr = (uint16_t)(RAM(pce, 0x2010) | RAM(pce, 0x2011) << 8);
+        uint16_t ptr = (uint16_t)(RAM(pce, tp->piece) | RAM(pce, tp->piece + 1) << 8);
         b->owner[slot] = (uint8_t)ya->cur_actor;
         b->dy[slot] = (int8_t)read_logical(pce, ptr);
         b->dx[slot] = (int8_t)read_logical(pce, (uint16_t)(ptr + 1));
@@ -135,8 +161,8 @@ void ys_actors_hook(Pce *pce, int after)
             }
         }
         b->count = RAM(pce, 0x2216);
-        b->cam_x = (uint16_t)(RAM(pce, 0x2C33) | RAM(pce, 0x2C34) << 8);
-        b->cam_y = (uint16_t)(RAM(pce, 0x2C35) | RAM(pce, 0x2C36) << 8);
+        b->cam_x = (uint16_t)(RAM(pce, ep->camera_x) | RAM(pce, ep->camera_x + 1) << 8);
+        b->cam_y = (uint16_t)(RAM(pce, ep->camera_y) | RAM(pce, ep->camera_y + 1) << 8);
         b->base = pce->vdc.reg[0x13];
         for (int i = 0; i < YS_SLOTS * 4; i++)
             b->sat[i] = pce->vdc.vram[(b->base + i) & (VDC_VRAM_SIZE - 1)];
@@ -147,7 +173,7 @@ void ys_actors_hook(Pce *pce, int after)
         break;
     case HOOK_VBLANK:
         ya->vbl_line = vce_line(pce);
-        ya->vbl_copy = (RAM(pce, 0x2080) & 0x02) != 0;
+        ya->vbl_copy = (RAM(pce, tp->vbl_flags) & tp->vbl_copy) != 0;
         break;
     case HOOK_WAIT: {
         int delta = (RAM(pce, 0x2241) - pce->cpu.a) & 0xFF;

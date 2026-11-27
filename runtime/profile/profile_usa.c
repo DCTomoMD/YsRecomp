@@ -272,6 +272,23 @@ static const YsIntroSkipProfile k_intro_skip = {
     .max_frames = 4000,
 };
 
+/* docs/ys_notes.md, "Engine memory map" (tools/trace/ys_actors.c) and "Panel" (ys_trace_ext.c, --panel-log) */
+static const YsTraceProfile k_trace = {
+    .hooks = {
+        /* end of the wait for the next frame: LDA $2241 */
+        [YS_TRACE_HOOK_WAIT] = { 0x4B1B, { 0xAD, 0x41, 0x22, 0x8D, 0x12 } },
+        /* VBlank: copies the camera of the finished list to the scroll */
+        [YS_TRACE_HOOK_VBLANK] = { 0x4AA3, { 0x1F, 0x80, 0x14, 0x17, 0x80 } },
+    },
+    .first_actor = 0x2E4A,
+    .piece = 0x2010,
+    .vbl_flags = 0x2080,
+    .vbl_copy = 0x02,
+    .hp = 0x2C43,
+    .label_chars = "H.PEXGOLDM", /* tiles 257-266 */
+    .digit_chars = "0123456789:/", /* tiles 449-460 */
+};
+
 const YsProfile g_ys_profile = {
     .identity = &k_identity,
     .disc = &k_disc,
@@ -290,4 +307,5 @@ const YsProfile g_ys_profile = {
     .menu_font = &k_menu_font,
     .launcher_sfx = &k_launcher_sfx,
     .intro_skip = &k_intro_skip,
+    .trace = &k_trace,
 };

@@ -34,6 +34,7 @@
 #include "app/ys_music.h"
 #include "app/ys_dialog.h"
 #include "app/ys_screen.h"
+#include "profile/ys_profile.h"
 
 static const char YS_HELP[] =
     "  (all with --frame)\n"
@@ -173,7 +174,8 @@ static void windows_frame(Pce *pce, long frame, const YsFrameList *eng)
     if (w->count)
         g_win_frames++;
     if (g_windows_out)
-        fprintf(g_windows_out, "q%ld 3E=%d%s", frame, pce->ram[0x3E], w->last_ok ? "" : " DIFFERENT");
+        fprintf(g_windows_out, "q%ld 3E=%d%s", frame, pce->ram[g_ys_profile.windows->count - 0x2000],
+                w->last_ok ? "" : " DIFFERENT");
     for (int k = 0; k < w->count; k++) {
         const YsWindow *win = &w->win[k];
         int r[4], vis = eng->kind != YS_LIST_NONE && ys_window_rect(win, eng->list.cam_x, eng->list.cam_y, r);
@@ -920,10 +922,10 @@ static void motion_frame_done(Pce *pce, long frame)
         } else {
             cam.last_n = -2;
         }
-        /* Hero walking on screen: the 1st sprite of palette 13 in front of the background (Adol) */
+        /* Hero walking on screen: the 1st sprite of Adol's palette in front of the background */
         int h = -1;
         for (int i = 0; i < 64 && h < 0; i++)
-            if ((b->sat[i * 4 + 3] & 0x8F) == 0x8D)
+            if ((b->sat[i * 4 + 3] & 0x8F) == (0x80 | g_ys_profile.equip->adol_pal))
                 h = i;
         if (h < 0) {
             hero.last_n = -2;
@@ -1191,7 +1193,7 @@ static void equip_log(const Pce *pce, int frame)
     for (int i = 0; i < 64; i++) {
         const uint16_t *e = &frame_sat[i * 4];
         int fi = equip_frame_of(g_equip_table, frame_vram, e);
-        int old = fi >= 0 && (e[3] & 0x0F) == 13;
+        int old = fi >= 0 && (e[3] & 0x0F) == g_ys_profile.equip->adol_pal;
         int now = fi >= 0 && l && adol < YS_ACTORS && l->owner[i] == adol;
         n_old += old;
         n_new += now;
@@ -1237,7 +1239,7 @@ static void equip_log(const Pce *pce, int frame)
     /* The colors: from the game x from the comparison */
     const uint16_t *ref = g_equip_table->pal;
     const YsFadeFrame *f = &g_fade_frame;
-    int base = 256 + 13 * 16;
+    int base = 256 + g_ys_profile.equip->adol_pal * 16;
     EquipColors col;
     equip_colors(g_equip_table, f, &col);
     (col.kind == EQUIP_COLORS_MAP ? &g_eql_col_map : col.kind == EQUIP_COLORS_FLAT ? &g_eql_col_flat : &g_eql_col_none)[0]++;
@@ -1300,8 +1302,8 @@ static void panel_log(const Pce *pce, int frame)
     static YsPanel p;
     static char last[320];
     ys_panel_read(pce, &p);
-    static const char k_label[] = "H.PEXGOLDM"; /* pieces 257-266 */
-    static const char k_digit[] = "0123456789:/"; /* pieces 449-460 */
+    const char *k_label = g_ys_profile.trace->label_chars; /* the label pieces, from YS_TILE_LABEL_FIRST */
+    const char *k_digit = g_ys_profile.trace->digit_chars; /* the digit pieces, from YS_TILE_DIGIT_FIRST */
     char txt[YS_PANEL_COLS + 1];
     int label_pal = -1, odd = 0;
     for (int c = 0; c < YS_PANEL_COLS; c++) {
@@ -1321,7 +1323,12 @@ static void panel_log(const Pce *pce, int frame)
     CropHudLayout hl;
     crop_hud_layout(&p, &hl);
     const uint8_t *r = pce->ram;
-    int exp = r[0xABB] | r[0xABC] << 8 | r[0xABD] << 16, next = r[0xC4A] | r[0xC4B] << 8 | r[0xC4C] << 16;
+#define R(a) r[(a) - 0x2000]
+    const YsCommonRam *cr = g_ys_profile.common;
+    const YsPanelProfile *pr = g_ys_profile.panel;
+    uint16_t hp = g_ys_profile.trace->hp;
+    int exp = R(cr->exp) | R(cr->exp + 1) << 8 | R(cr->exp + 2) << 16,
+        next = R(pr->next_level) | R(pr->next_level + 1) << 8 | R(pr->next_level + 2) << 16;
     /* the bar color read from the palette (piece 506) against the image one: the 1st point inside the bar */
     uint32_t bar_img = pce->vce.frame_width > YS_PANEL_X + 8 * YS_BAR_FIRST_COL
                            ? pce->vce.frame[(YS_PANEL_Y + 16 + 4) * pce->vce.frame_width + YS_PANEL_X + 8 * YS_BAR_FIRST_COL] & 0xFFFFFF
@@ -1330,8 +1337,9 @@ static void panel_log(const Pce *pce, int frame)
     snprintf(line, sizeof(line),
              "valid %d [%s] other-palette %d hud-save %d bars %d/%d ram H.P %u/%u EXP %u/%u GOLD %u NEXT %d (from RAM %d) color %06X image %06X",
              p.valid, txt, odd, hl.save, hl.bars > 0 ? hl.bar_len[0] : -1, hl.bars > 1 ? hl.bar_len[1] : -1,
-             r[0xC43] | r[0xC44] << 8, r[0xC48] | r[0xC49] << 8, exp, next, r[0xC41] | r[0xC42] << 8, crop_next_exp(&p),
-             next > exp ? next - exp : 0, p.bar_yellow & 0xFFFFFF, bar_img);
+             R(hp) | R(hp + 1) << 8, R(pr->hp_max) | R(pr->hp_max + 1) << 8, exp, next, R(cr->gold) | R(cr->gold + 1) << 8,
+             crop_next_exp(&p), next > exp ? next - exp : 0, p.bar_yellow & 0xFFFFFF, bar_img);
+#undef R
     if (strcmp(line, last) != 0) {
         printf("panel %d: %s\n", frame, line);
         memcpy(last, line, sizeof(last));
@@ -1371,7 +1379,7 @@ static void dialog_log_patch(Pce *pce)
         g_dlg.waits++;
     if (!ys_dialog_at(pce))
         return;
-    int speed = pce->ram[(0x27F6 + pce->cpu.x) & 0x1FFF];
+    int speed = pce->ram[(g_ys_profile.dialog->speed + pce->cpu.x) & 0x1FFF];
     long frame = (long)pce->vce.frame_count;
     if (speed) {
         if (g_dlg.open && (g_dlg.x != pce->cpu.x || frame > g_dlg.last + 120))
@@ -1386,7 +1394,7 @@ static void dialog_log_patch(Pce *pce)
         }
         g_dlg.last = frame;
         g_dlg.hits++;
-        g_dlg.limit = pce->ram[0x92];
+        g_dlg.limit = pce->ram[g_ys_profile.engine->unit - 0x2000]; /* the byte the text compares with (SBC $92) */
         if (speed < g_dlg.smin)
             g_dlg.smin = speed;
         if (speed > g_dlg.smax)
