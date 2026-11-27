@@ -7,12 +7,9 @@
 #include <SDL3/SDL.h>
 
 #include "cd/cdimage.h"
+#include "profile/ys_profile.h"
 
-/* Measurements of Ys Book I & II (USA), Redump format (.cue + 43 .bin), taken from the user's disc
- * with `app_tests --fingerprint <cue>`. They are numbers about the disc, not its content. */
-#define YS_TRACK_COUNT 43
-#define YS_TOC_CRC 0x34B2F40Eu
-#define YS_DATA_CRC 0xEC4E1070u
+/* The supported copy of the disc (track count, CRCs, title, names in the messages): g_ys_profile.disc. */
 
 static uint32_t crc_table[256];
 
@@ -96,14 +93,15 @@ int disc_fingerprint(const char *cue_path, DiscFingerprint *fp, char *msg, size_
     if (data >= 0) {
         const CdTrack *t = &img->tracks[data];
         static uint8_t sector[CD_SECTOR_DATA];
+        const YsDiscIdentity *d = g_ys_profile.disc;
         for (uint32_t lba = t->start_lba; lba <= t->end_lba; lba++) {
             if (cd_read_sector(img, lba, sector) != 0)
                 memset(sector, 0, sizeof(sector)); /* sector outside the file: the CRC will not match */
             fp->data_crc = crc_update(fp->data_crc, sector, sizeof(sector));
-            if (lba == t->start_lba + 1) {
-                static const char title[] = "Ancient Ys Vanished";
-                for (size_t k = 0; k + sizeof(title) - 1 <= sizeof(sector) && !fp->is_ys; k++)
-                    fp->is_ys = memcmp(sector + k, title, sizeof(title) - 1) == 0;
+            if (lba == t->start_lba + (uint32_t)d->title_sector) {
+                size_t len = strlen(d->title);
+                for (size_t k = 0; k + len <= sizeof(sector) && !fp->is_ys; k++)
+                    fp->is_ys = memcmp(sector + k, d->title, len) == 0;
             }
         }
     }
@@ -115,32 +113,33 @@ int disc_fingerprint(const char *cue_path, DiscFingerprint *fp, char *msg, size_
 DiscCheck disc_check_cue(const char *cue_path, char *msg, size_t msg_size)
 {
     DiscFingerprint fp;
+    const YsDiscIdentity *d = g_ys_profile.disc;
     if (disc_fingerprint(cue_path, &fp, msg, msg_size) != 0)
         return DISC_OPEN_FAILED;
     if (!fp.is_ys) {
-        snprintf(msg, msg_size, "%s is not Ys Book I & II.", file_name(cue_path));
+        snprintf(msg, msg_size, "%s is not %s.", file_name(cue_path), d->game_name);
         return DISC_NOT_YS;
     }
-    if (fp.track_count != YS_TRACK_COUNT) {
+    if (fp.track_count != d->track_count) {
         snprintf(msg, msg_size,
-                 "%s is Ys Book I & II, but it has %d tracks; the supported copy has %d\n"
-                 "(Redump format: one .cue and 43 .bin files).",
-                 file_name(cue_path), fp.track_count, YS_TRACK_COUNT);
+                 "%s is %s, but it has %d tracks; the supported copy has %d\n"
+                 "(Redump format: one .cue and %d .bin files).",
+                 file_name(cue_path), d->game_name, fp.track_count, d->track_count, d->track_count);
         return DISC_LAYOUT_DIFF;
     }
-    if (fp.toc_crc != YS_TOC_CRC) {
+    if (fp.toc_crc != d->toc_crc) {
         snprintf(msg, msg_size,
-                 "%s is Ys Book I & II, but some tracks have a different size from the supported copy.\n"
+                 "%s is %s, but some tracks have a different size from the supported copy.\n"
                  "A .bin file may be incomplete, or this copy was made in another way\n"
-                 "(supported: Redump format, one .cue and 43 .bin files).",
-                 file_name(cue_path));
+                 "(supported: Redump format, one .cue and %d .bin files).",
+                 file_name(cue_path), d->game_name, d->track_count);
         return DISC_LAYOUT_DIFF;
     }
-    if (fp.data_crc != YS_DATA_CRC) {
+    if (fp.data_crc != d->data_crc) {
         snprintf(msg, msg_size,
-                 "%s is Ys Book I & II, but its data is different from the supported version\n"
-                 "(Ys Book I & II, USA). It may be another version or a damaged copy.",
-                 file_name(cue_path));
+                 "%s is %s, but its data is different from the supported version\n"
+                 "(%s). It may be another version or a damaged copy.",
+                 file_name(cue_path), d->game_name, d->version_name);
         return DISC_DATA_DIFF;
     }
     msg[0] = 0;

@@ -104,9 +104,13 @@ target_link_libraries(pce_app PUBLIC pce_core SDL3::SDL3-static ${PLATFORM_HOST_
 # Launcher: the user's JPG images, decoded with the stb_image bundled in the SDL sources
 set_source_files_properties(runtime/app/launcher_image.c PROPERTIES INCLUDE_DIRECTORIES "${sdl3_SOURCE_DIR}/src/video")
 
+# Profile of the USA edition (runtime/profile: the values that come from its disc, review_jp/01_profile_design.md).
+# Each executable links exactly one profile; every one that uses runtime/app links this one (review_jp/05, Q1).
+add_library(ys_profile_usa STATIC runtime/profile/profile_usa.c)
+
 # Main program (window), with the interpreter.
 add_executable(pce_runtime runtime/main.c)
-target_link_libraries(pce_runtime PRIVATE pce_core pce_app pce_input trace_profiler SDL3::SDL3-static)
+target_link_libraries(pce_runtime PRIVATE pce_core pce_app pce_input trace_profiler ys_profile_usa SDL3::SDL3-static)
 
 # PCERecomp's trace generator (its tools/trace/pce_trace.c; comparison with the reference emulator) with the
 # Ys extension (tools/trace/ys_trace_ext.c: the PC version's options; pce_trace --help).
@@ -114,7 +118,7 @@ pce_trace_executable(pce_trace tools/trace/ys_trace_ext.c tools/trace/ys_actors.
     runtime/app/equip.c runtime/app/equip_none.c
     runtime/app/gpu_draw.c
     runtime/app/ys_engine.c runtime/app/ys_windows.c runtime/app/ys_scroll.c runtime/app/ys_screen.c runtime/app/ys_music.c runtime/app/ys_dialog.c runtime/app/crop.c runtime/app/fade.c runtime/app/menu_font.c runtime/app/battle.c runtime/app/ys_reward.c)
-target_link_libraries(pce_trace PRIVATE SDL3::SDL3-static)
+target_link_libraries(pce_trace PRIVATE ys_profile_usa SDL3::SDL3-static)
 
 # ---- Tests ----
 enable_testing()
@@ -123,7 +127,7 @@ enable_testing()
 # Configuration (YsRecomp.ini) and identification of the disc in the chosen folder (error cases with
 # altered copies of the user's disc in build/app_output; without the disc, the disc part is skipped).
 add_executable(app_tests tests/app/app_tests.c)
-target_link_libraries(app_tests PRIVATE pce_app)
+target_link_libraries(app_tests PRIVATE pce_app ys_profile_usa)
 add_test(NAME app_config COMMAND app_tests config "${CMAKE_BINARY_DIR}/app_output/config")
 # Separate volumes (Mednafen balance) and the Geargrafx mix unchanged.
 add_test(NAME app_volume COMMAND app_tests volume "${CMAKE_BINARY_DIR}/app_output/volume")

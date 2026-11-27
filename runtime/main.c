@@ -102,6 +102,7 @@
 #include "app/volume.h"
 #endif
 #include "app/pacing.h"
+#include "profile/ys_profile.h"
 #include "host/host_gpu_timing.h"
 #include "app/present.h"
 #include "host/host_display_timing.h"
@@ -162,7 +163,7 @@ static int hidden_window(void)
 static Uint64 g_game_t0; /* time the game thread started ("Game time" at the end) */
 
 #ifdef PCE_APP_YS
-#define WINDOW_TITLE "Ys Book I & II"
+#define WINDOW_TITLE (g_ys_profile.identity->window_title)
 
 /* Answer of the Windows "choose folder" dialog (arrives on another thread). */
 static SDL_AtomicInt g_dialog_done;
@@ -182,8 +183,9 @@ static void SDLCALL folder_chosen(void *userdata, const char *const *list, int f
 static int choose_folder(const char *start, char *folder, size_t size)
 {
     SDL_PropertiesID props = SDL_CreateProperties();
-    SDL_SetStringProperty(props, SDL_PROP_FILE_DIALOG_TITLE_STRING,
-                          "Choose the Ys Book I & II (USA) folder (.cue and .bin files)");
+    char title[256];
+    snprintf(title, sizeof(title), "Choose the %s folder (.cue and .bin files)", g_ys_profile.identity->disc_name);
+    SDL_SetStringProperty(props, SDL_PROP_FILE_DIALOG_TITLE_STRING, title);
     if (start && start[0])
         SDL_SetStringProperty(props, SDL_PROP_FILE_DIALOG_LOCATION_STRING, start);
     SDL_SetAtomicInt(&g_dialog_done, 0);
@@ -220,8 +222,9 @@ static int app_find_game(const char *config_path, char *cue, size_t cue_size, ch
                 return -1; /* test: no choose-folder dialog */
             char text[2600];
             snprintf(text, sizeof(text), "%s%s\n\nPlease choose the folder with the .cue and .bin files of\n"
-                     "Ys Book I & II (USA).",
-                     from_config ? "The game folder saved in the settings can no longer be used.\n\n" : "", msg);
+                     "%s.",
+                     from_config ? "The game folder saved in the settings can no longer be used.\n\n" : "", msg,
+                     g_ys_profile.identity->disc_name);
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, WINDOW_TITLE, text, NULL);
         }
         from_config = 0;
@@ -2596,7 +2599,7 @@ int main(int argc, char **argv)
         else
             rom_path = argv[i];
     }
-    host_paths_init("YsRecomp"); /* the edition's app id comes from the profile (Phase 3B) */
+    host_paths_init(g_ys_profile.identity->app_id);
 
 #ifdef PCE_APP_YS
     if (!rom_path && !bios_path) {
@@ -2607,7 +2610,7 @@ int main(int argc, char **argv)
         }
         if (!config_path) {
             const char *exe_dir = host_user_dir();
-            snprintf(app_config, sizeof(app_config), "%sYsRecomp.ini", exe_dir ? exe_dir : "");
+            snprintf(app_config, sizeof(app_config), "%s%s", exe_dir ? exe_dir : "", g_ys_profile.identity->ini_name);
             config_path = app_config;
         }
         if (app_find_game(config_path, app_cue, sizeof(app_cue), app_save, sizeof(app_save)) != 0) {
@@ -3033,8 +3036,10 @@ int main(int argc, char **argv)
                     /* Compares on the spot (user's choice): smooth motion assembled on the GPU <-> on the
                      * CPU */
                     motion_cpu = !motion_cpu;
-                    SDL_SetWindowTitle(window, motion_cpu || !gpu_ok ? WINDOW_TITLE " - smooth motion on the CPU"
-                                                                     : WINDOW_TITLE " - smooth motion on the GPU");
+                    char title[256];
+                    snprintf(title, sizeof(title), "%s%s", WINDOW_TITLE,
+                             motion_cpu || !gpu_ok ? " - smooth motion on the CPU" : " - smooth motion on the GPU");
+                    SDL_SetWindowTitle(window, title);
                 } else if (ev.key.scancode == SDL_SCANCODE_F12 && !menu.open && !ev.key.repeat && g_emu.record) {
                     recording_mark(last_seq >= 0 ? last_seq : g_emu.frames_done);
                 } else if (menu.open && k >= 0)

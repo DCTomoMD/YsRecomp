@@ -6,7 +6,11 @@
   3. each OS implementation (runtime/host/<os>/) includes nothing from another OS's folder;
   4. host layer: does not include the emulated console's headers (pce/, cpu/, cd/, bios/);
   5. PCERecomp (--pcerecomp FOLDER): nothing about this game nor about the host and profile layers
-     (its README may name the game, as the project that uses it).
+     (its README may name the game, as the project that uses it);
+  6. profile layer (runtime/profile/): plain data, includes nothing from app/ or host/ and no SDL
+     (review_jp/01_profile_design.md, chapter 9);
+  7. common code and the trace extension (runtime/main.c, runtime/app/, tools/trace/): no branch on the edition
+     (no edition_id comparison, no PCE_EDITION): the edition is chosen by linking one profile, not by code.
 
 Usage: python tools/check_layers.py [--pcerecomp FOLDER]
 Exit: 0 = all rules hold, 1 = some rule broken (each case listed), 2 = usage error.
@@ -26,6 +30,8 @@ HOST_CONSOLE = re.compile(r"#\s*include\s*\"(pce|cpu|cd|bios)/")
 PCERECOMP_GAME = re.compile(r"\bYs\b|\bys_|\bapp/|\bAdol\b|\bhost/|\bprofile/")
 PCERECOMP_EXT = SOURCE_EXT + (".py", ".txt", ".md", ".cmake", ".toml")
 PCERECOMP_SKIP_DIRS = {"reference", "build", ".git", "__pycache__"}
+PROFILE_DEPS = re.compile(r"#\s*include\s*[<\"](SDL|app/|host/)")
+EDITION_BRANCH = re.compile(r"\bedition_id\s*[=!]=|strcmp\s*\([^)]*edition|\bPCE_EDITION")
 
 
 def source_files(top, exts=SOURCE_EXT, skip_dirs=()):
@@ -61,6 +67,13 @@ def main():
         if os.path.exists(top):
             for p in source_files(top):
                 scan(p, COMMON_OS, problems, "1 common->OS")
+    profile = os.path.join(runtime, "profile")
+    if os.path.isdir(profile):
+        for p in source_files(profile):
+            scan(p, PROFILE_DEPS, problems, "6 profile->app/host/SDL")
+    for top in (os.path.join(runtime, "main.c"), os.path.join(runtime, "app"), os.path.join(ROOT, "tools", "trace")):
+        for p in source_files(top):
+            scan(p, EDITION_BRANCH, problems, "7 edition branch")
     for p in source_files(host):
         scan(p, HOST_GAME, problems, "2 host->game")
         scan(p, HOST_CONSOLE, problems, "4 host->console")

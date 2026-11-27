@@ -186,7 +186,7 @@ function(ys_edition)
         add_dependencies(equip_frames pce_trace)
         # The C drawing (equip.c) equal to the Python rules (equip_art.py) in every frame and piece
         add_executable(equip_check tools/equip/equip_check.c runtime/app/equip.c runtime/app/ys_fade.c)
-        target_link_libraries(equip_check PRIVATE pce_core equip_frames)
+        target_link_libraries(equip_check PRIVATE pce_core equip_frames ys_profile_usa)
         add_test(NAME equip_c_ys COMMAND ${PYTHON_EXE} "${CMAKE_SOURCE_DIR}/tools/equip/equip_c_test.py"
             $<TARGET_FILE:equip_check> "${CMAKE_BINARY_DIR}/ys_output/equip_check.bin")
         set_tests_properties(equip_c_ys PROPERTIES PASS_REGULAR_EXPRESSION "equip_c_test: OK")
@@ -195,7 +195,7 @@ function(ys_edition)
         runtime/app/gpu_draw.c
         runtime/app/ys_engine.c runtime/app/ys_windows.c runtime/app/ys_scroll.c runtime/app/ys_screen.c runtime/app/ys_music.c runtime/app/ys_dialog.c runtime/app/crop.c runtime/app/fade.c runtime/app/menu_font.c runtime/app/battle.c runtime/app/ys_reward.c)
         target_compile_definitions(ys_trace PRIVATE PCE_RECOMP)
-        target_link_libraries(ys_trace PRIVATE ys_recomp equip_frames SDL3::SDL3-static)
+        target_link_libraries(ys_trace PRIVATE ys_recomp equip_frames ys_profile_usa SDL3::SDL3-static)
 
         # The game for the player. Without arguments: asks for the bin/cue folder the first time and keeps the
         # configuration and the save next to the .exe (YsRecomp.ini, saves/). Accepts pce_runtime's arguments.
@@ -204,7 +204,8 @@ function(ys_edition)
         target_compile_definitions(YsRecomp PRIVATE PCE_RECOMP PCE_APP_YS)
         # Launcher: without launcher/ next to the .exe, the images in docs/
         target_compile_definitions(YsRecomp PRIVATE "PCE_DOCS_DIR=\"${CMAKE_SOURCE_DIR}/docs\"")
-        target_link_libraries(YsRecomp PRIVATE ys_recomp pce_app pce_input equip_frames trace_profiler SDL3::SDL3-static)
+        target_link_libraries(YsRecomp PRIVATE ys_recomp pce_app pce_input equip_frames trace_profiler ys_profile_usa
+            SDL3::SDL3-static)
 
         # The folder of the ys_trace images below. ys_trace does not create it, and a picture it cannot write makes it
         # exit with 1 without a message (after "LOCKSTEP OK"): in a new build the first of these tests failed until a

@@ -151,7 +151,7 @@ runtime/profile/
 
 | 段 | 内容 | 主なファイル |
 |---|---|---|
-| 3A-1 | 骨格：`ys_profile.h`、`profile_usa.c`（`identity` と `disc`）、CMake の `ys_profile_usa`、リンクする実行ファイル（Q1）。`disc_id.c` の識別値と文言、`main.c` のタイトル・フォルダ選択の文言・ini 名・`host_paths_init` の app id、`launcher.c` の作品名。依存の規則（Q7）。値を比べる道具 T1 | `runtime/profile/`、`CMakeLists.txt`、`cmake/ys_edition.cmake`、`disc_id.c`、`main.c`、`launcher.c`、`tools/check_layers.py`、`tools/profile_values.py`（新規） |
+| 3A-1 | 骨格：`ys_profile.h`、`profile_usa.c`（`identity` と `disc`）、CMake の `ys_profile_usa`、リンクする実行ファイル（Q1）。`disc_id.c` の識別値と文言、`main.c` のタイトル・フォルダ選択の文言・ini 名・`host_paths_init` の app id。依存の規則（Q7）。値を比べる道具 T1 | `runtime/profile/`、`CMakeLists.txt`、`cmake/ys_edition.cmake`、`disc_id.c`、`main.c`、`tools/check_layers.py`、`tools/profile_values.py`（新規） |
 | 3A-2 | 単純なフック表：`ys_music`、`ys_screen`（`switch` を表に）、`ys_scroll`、`ys_reward` | `runtime/app/ys_*.c` |
 | 3A-3 | `ys_windows`、`ys_intro`、`ys_dialog`、`ys_fade` | 同上 |
 | 3A-4 | `ys_engine`、`ys_panel`（RAM と、配列の大きさ以外のタイル）、`equip`（RAM・CD RAM・パレット）、`menu_font`（タイルと CRC）、`launcher_sound`（効果音の番号とフレーム）、`intro_skip` | 同上 |
@@ -191,7 +191,19 @@ runtime/profile/
 | Q8 | `ys_masks.c` などのゲームの規則（2.3。アクターのフラグ、歩幅 8、ブロックの高さ 32、マップ 64×32、`RING`） | **3A では移さない**。`01` の 3.4 の「両作に共通のエンジンの特性」（`YS_ACTORS` など）と同じ扱いにし、E7 の表に「Phase 2 の残りで日本版を確かめ、違えば移す」と書く | 新しいサブ構造体 `YsActorRules` を作って移す |
 | Q9 | Windows での確認の頻度 | **3A-7 で 1 回**（M3 と同じ before／after。before は 3A-1 の直前、after は 3A-7）。各段は macOS の全試験で確かめる | 段ごとに Windows でも確かめる（7 回） |
 
+**2026-11-22：ユーザーの回答は「Q1〜Q9 は全部推奨で」。** 9 問とも「案（推奨）」の列のとおりに決めた。
+
+Q3 にはユーザーから補足があった。「用意した System Card は、北米版が 2.2、日本版が 3 で、メジャーアップデートなので中身は大幅に違うはず」。
+- 版の番号について：`roms/bios/` にある北米版のファイルは `[BIOS] TurboGrafx CD System Card (USA) (v2.0).pce` で、
+  中身の版の文字列は `VER. 2.00`。上流が前提とする CRC `FF2A5EC3` とも一致する（`03` の 8.6）[C]。2.2 ではない。
+- 中身の違いについて：`03` の 8.6 の解析と合う。入口表の飛び先と割り込みの番地は、3.0 が 2.0 より −$19 ずれている。
+  作業域を使う命令の数も一部違う（`$22E2`、`$221F`）[C]。作業域の番地の意味が同じかは [A] のまま。
+- このため、`$22xx` を profile に入れず、日本版で確かめるまでコードに残す（Q3 の推奨）方針は、この違いとも合う。
+
 - キャッシュのファイル名（`menu_font.bin`、`launcher_sfx.bin`）は profile に入れない（版ごとにフォルダが分かれるため。`01` の P4）。
+- `launcher.c:12-14` の作品名と発売年は profile に入れない。日本版のランチャーは北米版と同じ表示にすると決めてある（`01` の P11）ので、
+  版で変わらない。
+- `edition_id`（`"usa"`）は 3A では足さない。使う場所（セッションの `# edition:`、起動のログ）は 3B で作るので、そのときに足す。
 - `menu_chip.c:7` の `MENU_CHIP_RET 0x3FFE`（ゲームが実行しない番地という前提）は Q8 と同じ扱いにし、E7 の表に載せる。
 
 ---
@@ -217,3 +229,95 @@ runtime/profile/
 | `01` の 9 章 | 依存の規則の試験：Q7 |
 
 3B に残るもの：`profile_jp.c`、`profile_report.c`、NULL による機能の無効化、`YsIandII_JP`、BIOS の流れ（`04` の計画どおり）。
+
+---
+
+## 8. 3A-1 の結果（2026-11-22、macOS）
+
+基準は `3956404`（本書の計画のコミット）。
+
+### 8.1 変えたもの
+
+| ファイル | 内容 |
+|---|---|
+| `runtime/profile/ys_profile.h`（新規） | `YsIdentity`（`app_id`、`ini_name`、`window_title`、`disc_name`）、`YsDiscIdentity`（トラック数、2 つの CRC、タイトルの文字列とセクタ、メッセージの中の名前）、`YsProfile`、`extern const YsProfile g_ys_profile` |
+| `runtime/profile/profile_usa.c`（新規） | 北米版の値。`main.c` と `disc_id.c` から、値を変えずに移した |
+| `runtime/app/disc_id.c`・`.h` | `YS_TRACK_COUNT`・`YS_TOC_CRC`・`YS_DATA_CRC` とタイトルの文字列をなくし、`g_ys_profile.disc` を読む。メッセージの中の名前とトラック数（「43」）も profile から。`.h` はコメントだけ |
+| `runtime/main.c` | ウィンドウのタイトル、フォルダ選択の見出しと案内の文、`host_paths_init` の app id、ini の名前を `g_ys_profile.identity` から。F6 でタイトルに足す文は、文字列の連結から `snprintf` に替えた |
+| `CMakeLists.txt`、`cmake/ys_edition.cmake` | `ys_profile_usa`（静的ライブラリ）を作り、`pce_runtime`・`pce_trace`・`app_tests`・`equip_check`・`ys_trace`・`YsRecomp` にリンク（Q1） |
+| `tools/check_layers.py` | 規則 6（profile から `app/`・`host/`・SDL を include しない）と規則 7（版で分ける分岐を書かない）を足した（Q7）。試験 `host_layers` のまま |
+| `tools/profile_values.py`（新規） | T1（4 章） |
+
+### 8.2 確かめたこと
+
+| 確かめたこと | 結果 |
+|---|---|
+| T1：`profile_values.py 3956404 --allow 1:2` | **OK** [C]。数字 4 個（43、2 つの CRC、タイトルのセクタ 1）が、コードから消えて profile に入った。文字列 10 個は、profile の値そのものか、新しい書式の `%s`・`%d` に profile の値を入れると元と同じになる。`--allow 1:2` は、`sizeof(title) - 1` の 2 個の `1` が `strlen` に替わって消えた分。わざと値を変えると、差として出ることも確かめた（トラック数を 44 にした場合と、`disc_name` を変えた場合） |
+| `check_layers.py --pcerecomp external/PCERecomp` | **OK** [C]。新しい規則の正規表現は、違反の例に当たり、正しい書き方には当たらないことを確かめた |
+| ビルド（`scripts/build.sh`） | 警告 0 [C]。リンク時の最適化（LTO）があるので、実行ファイルに `g_ys_profile` の名前は残らないが、値の文字列は入っている |
+| 試験の名前と本数 | 前と同じ 100 本 [C] |
+| `ctest -LE history -j 4 --repeat until-pass:2` | **90 本のうち 89 本合格、skip 1 本（`perf_ys`）、失敗 0**（1118 秒）[C]。`app_prep_ys` は 1 回目で合格（139 秒） |
+
+- history は 3A-4・3A-5 の後と 3A-7 で回す（3.2 のとおり）。
+- Windows での確認は 3A-7 でまとめて行う（Q9）。
+
+### 8.3 3A-1 と一緒に行ったこと（ユーザーの指示、3A の範囲外）
+
+- `build.bat`（新規）：Windows でダブルクリックすると `build.ps1 -Package` を実行し、最後に窓を止める。引数があれば
+  そのまま `build.ps1` に渡す。改行は CRLF で、`.gitattributes`（新規）の `*.bat text eol=crlf` で保つ。
+  README と CLAUDE.md に使い方を書いた。**Windows での動作は未確認**（この Mac では動かせない）。
+
+---
+
+## 9. 3A-2 の結果（2026-11-27、macOS）
+
+基準は `3956404`。3A-1 がまだコミットされていないので、T1 は 3A-1 と 3A-2 を合わせて確かめた（3A-1 の `--allow 1:2` を含む）。
+
+### 9.1 変えたもの
+
+| ファイル | 内容 |
+|---|---|
+| `runtime/profile/ys_profile.h` | `YsMusicProfile`、`YsScreenProfile`、`YsScrollProfile`（と `YsScrollHook`、`YS_SCROLL_HOOK_*`）、`YsRewardProfile`（と `YsRewardHook`、`YS_REWARD_*`）。`YsProfile` に `music`・`screen`・`scroll`・`reward` を足した。表の形は各モジュールの今の形のまま（Q6） |
+| `runtime/profile/profile_usa.c` | 4 つのモジュールの北米版の値。値は変えずに移した |
+| `runtime/app/ys_music.c` | PC 2 つ、バンク、シグネチャ 6 バイトを `g_ys_profile.music` から |
+| `runtime/app/ys_screen.c` | ローダとブートの PC・シグネチャ・バンク、プログラム番号を `g_ys_profile.screen` から。`ys_screen_layout` の `switch` は、case の順のまま `if` に替えた（K2） |
+| `runtime/app/ys_scroll.c` | フック 3 行、バンク、RAM（`$2C2F/30`、`$2C31`、`$20F3`、`$2082` とその bit `$40`）を `g_ys_profile.scroll` から。`$220E/0F`・`$2212/13` は System Card の作業域なのでコードに残した（Q3） |
+| `runtime/app/ys_reward.c` | フック 6 行と RAM（`$2022`、`$2736`、`$2C41`、`$2ABB`）を `g_ys_profile.reward` から。`w < 0x30` は `YS_WALKERS`（`ys_engine.h`、Q8 でコードに残す値）に替えた |
+| `tools/profile_values.py` | `--new VALUE:COUNT` を足した（9.2）。文字列の組み立ては、目当ての文字列に現れる値だけを試すようにした（値が 140 個ほどに増え、組み合わせが多すぎて終わらなかったため。結果は変わらない） |
+
+- 手で導いていた PC の範囲（`ys_scroll.c` の `0x4AD8`〜`0x4B05`、`ys_reward.c` の `0x707C`〜`0x7998`）は、profile の表の最小値と
+  最大値から、初めてのフックのときに 1 回だけ計算する（2.2）。`ys_reward_init` はどこからも呼ばれていない（構造体は静的に 0）
+  ので、範囲は状態の構造体ではなくモジュールの中に置いた。
+- 2 バイト目以降の番地（`$2C30`、`$2C42`、`$2ABC`、`$2ABD`）は「先頭の番地 + 1、+ 2」で読む。profile には先頭だけを置く。
+- プログラム番号 `0x04`（イントロ）は `YsScreenProfile.intro_program` に置いた。`ys_intro.c:6` の写しは 3A-3 でここを読むように替える。
+
+### 9.2 T1 の調整と理由
+
+T1 は全ファイルを合わせて数えるので、コードに新しく書いた数（ループの始まりの 0、「先頭 + 1」の 1 など）が、移した同じ数を隠す。
+その分を `--new` で数える（コードに今ある個数より多くは書けない）。
+
+| 引数 | 理由 |
+|---|---|
+| `--allow 1:2` | 3A-1（8.2） |
+| `--allow 3:3`、`--allow 4:1` | シグネチャを比べるループの上限 `k < 3`（`ys_screen.c`、`ys_scroll.c`）、`k < 4`、`h < 3` を、`sizeof` と `YS_SCROLL_HOOKS` に替えた |
+| `--allow 0x30:1` | `ys_reward.c` の `w < 0x30` を `YS_WALKERS` に替えた |
+| `--allow 0x80:1` | `ys_music.c` でバンク `0x80` を 2 回書いていたのを、`bank` の 1 つにまとめた |
+| `--allow 0x2C2F:1`、`0x2C30:2`、`0x2C42:1`、`0x2ABC:1`、`0x2ABD:1` | 同じ番地を 2 回読んでいたもの（`$2C2F/30`）と、2 バイト目以降を「先頭 + 1、+ 2」にしたもの |
+| `--allow 0x4AD8:1`、`0x4B05:1`、`0x707C:1`、`0x7998:1` | 手で導いていた PC の範囲を、表から計算する形にした |
+| `--new 0:3` | 範囲を計算するループの `h = 0` と最大値の初期値 `0`、`hooks[0]` |
+| `--new 1:6` | `ys_scroll.c` の `h = 1` と `map_x + 1`（3 か所）、`ys_reward.c` の `gold + 1`・`exp + 1` |
+| `--new 2:1` | `ys_reward.c` の `exp + 2` |
+
+### 9.3 確かめたこと
+
+| 確かめたこと | 結果 |
+|---|---|
+| T1（9.2 の引数） | **OK** [C]。数字 139 個が、コードから消えて profile に入った。文字列は 3A-1 の 10 個のまま |
+| T1 がわざと変えた値を見つけるか | 見つけた [C]：フックの PC を `0x4AE1` → `0x4AE2`、`load_program` を `0x01` → `0x02`、`disc_name` を変えた 3 つの場合（それぞれ差 2、2、1 件）。確かめたあと、ファイルは元に戻した（`cmp` で同じ） |
+| `check_layers.py --pcerecomp external/PCERecomp` | **OK** [C] |
+| ビルド（`scripts/build.sh`） | 警告 0 [C] |
+| 試験の名前と本数 | 前と同じ 100 本 [C] |
+| `ctest -LE history -j 4 --repeat until-pass:2` | **90 本のうち 89 本合格、skip 1 本（`perf_ys`）、失敗 0**（1104 秒）[C]。やり直しになった試験はない。`app_prep_ys` は 1 回目で合格（139 秒）。実時間の試験も、しきい値を変えずに合格（K3） |
+
+- history は 3A-4・3A-5 の後と 3A-7 で回す（3.2 のとおり）。3A-2 で触れたフックは、セッションの試験（`session_ys_*`）と枠・HUD の試験で通っている。
+- Windows での確認は 3A-7 でまとめて行う（Q9）。
