@@ -83,6 +83,8 @@ natively on PC (Windows). The generated C mimics the CPU instruction by instruct
 - Windows 11, PowerShell (Bash also available), Python 3.14, VS 2022 Build Tools (MSVC); the Build Tools CMake is not in
   PATH, `build.ps1` calls it. SDL3 3.2.30 is downloaded by CMake on the first build.
 - `.\build.ps1` builds (Release, in `build\`). Quiet: only warnings/errors and the test summary; `-Verbose` shows all.
+- `build.bat`（2026-11-22 追加）：ダブルクリックで `build.ps1 -Package` を実行し、最後に窓を止める。引数があれば
+  そのまま `build.ps1` に渡す。改行は CRLF（`.gitattributes` の `*.bat text eol=crlf`）。
 - **The user plays, records sessions and debugs with `dist\YsRecomp\`**: after any runtime change, run
   `.\build.ps1 -Package` and tell the user to run `dist\YsRecomp\YsRecomp.exe` (their sessions: `dist\YsRecomp\sessions\`).
 - `.\build.ps1 -Package` tests (label `package`) and builds the player package in `dist\` (`YsRecomp\` + `.zip`; readme

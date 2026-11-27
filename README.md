@@ -116,6 +116,9 @@ cd YsRecomp
 .\build.ps1 -Package   # player package in dist\YsRecomp\ and dist\YsRecomp.zip
 ```
 
+Without a command line: double-click `build.bat` in the project folder. It runs `build.ps1 -Package` and keeps the
+window open at the end; `build.bat -TestAll` (from a command prompt) passes the options on to `build.ps1`.
+
 On macOS: Apple silicon, Xcode Command Line Tools (Apple Clang), `cmake` and `ninja` (for example from Homebrew),
 and Python 3.11 or later in a `.venv` folder in the project. `scripts/build.sh` takes the same steps and options as
 `build.ps1`; the executables also go to `build/Release/` (the player is `build/Release/YsRecomp.app`).
