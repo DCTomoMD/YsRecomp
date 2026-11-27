@@ -10,28 +10,28 @@
 #include "app/ys_fade.h" /* ys_fade_channel */
 #include "pce/vce.h"   /* VCE_MAX_WIDTH, VCE_ACTIVE_LINES */
 
-/* Measurements of the game image (app/crop.h) */
-#define FRAME_LEFT 8      /* border outline columns */
-#define FRAME_RIGHT 327
-#define FRAME_TOP 11      /* outline lines */
-#define FRAME_MAP_TOP 25
-#define FRAME_MAP_BOTTOM 156
-#define FRAME_BOTTOM 170
-#define MAP_X 24          /* map: 288 x 128 */
-#define MAP_Y 27
-#define MAP_W 288
-#define MAP_H 128
-#define PANEL_TOP 171     /* 171-178 black; panel 179-219 */
-#define PANEL_Y 179
-#define PANEL_H 41
+/* Measurements of the game image (profile/ys_profile.h, YS_IMG_*) */
+#define FRAME_LEFT YS_IMG_FRAME_LEFT
+#define FRAME_RIGHT YS_IMG_FRAME_RIGHT
+#define FRAME_TOP YS_IMG_FRAME_TOP
+#define FRAME_MAP_TOP YS_IMG_FRAME_MAP_TOP
+#define FRAME_MAP_BOTTOM YS_IMG_FRAME_MAP_BOTTOM
+#define FRAME_BOTTOM YS_IMG_FRAME_BOTTOM
+#define MAP_X CROP_MAP_X
+#define MAP_Y CROP_MAP_Y
+#define MAP_W CROP_MAP_W
+#define MAP_H CROP_MAP_H
+#define PANEL_TOP YS_IMG_PANEL_TOP
+#define PANEL_Y YS_IMG_PANEL_Y
+#define PANEL_H CROP_PANEL_H
 #define PANEL_W CROP_PANEL_W /* columns 8-327, as wide as the border */
-#define LOAD_INNER_BOTTOM 218 /* load screen: inner area down to 218, outlines on lines 220 and 234 */
-#define LOAD_BOTTOM 234
+#define LOAD_INNER_BOTTOM YS_IMG_LOAD_INNER_BOTTOM
+#define LOAD_BOTTOM YS_IMG_LOAD_BOTTOM
 #define LOAD_MID_Y 37         /* Frame: the middle (181 lines from here) between the two edges */
 #define FRAME_BELOW 4         /* Frame: black breathing-room lines below the panel */
 #define FRAME_VIEW_H CROP_FRAME_VIEW_H
-#define MIN_W 336
-#define MIN_H 220
+#define MIN_W YS_IMG_MIN_W
+#define MIN_H YS_IMG_MIN_H
 
 static int is_black(uint32_t p) { return (p & 0xFFFFFF) == 0; }
 

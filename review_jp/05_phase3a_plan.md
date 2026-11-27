@@ -485,3 +485,56 @@ T1 は全ファイルを合わせて数えるので、コードに新しく書�
   `INTRO_MAX_FRAMES`）、ランチャーの試験（`launcher`、`launcher_ys`）、history の滑らかな動き・鉱山の明かり・ウィンドウの試験で通っている。
 - 次に history を回すのは、3A-5 の後と 3A-7（3.2 のとおり）。
 - Windows での確認は 3A-7 でまとめて行う（Q9）。
+
+---
+
+## 12. 3A-5 の結果（2026-11-28、macOS）
+
+基準は `74019a8`（3A-4 のコミット）。Q2 のとおり、画面の幾何と配列の大きさは**コンパイル時の定数のまま**、`runtime/profile/ys_profile.h` の末尾の 1 か所に集めた。
+値は北米版のもので、「両方の版で同じと仮定している [A]」と注を付けた（`01` の U12。日本版で違うと分かったら、そのときに profile の構造体へ移す）。
+
+### 12.1 変えたもの
+
+| ファイル | 内容 |
+|---|---|
+| `runtime/profile/ys_profile.h` | 定数 `YS_IMG_*`（枠の線 6、地図 4、パネルの位置と大きさ 4、ロード画面の線 2、ゲームの画面の最小の大きさ 2）、`YS_PANEL_ROWS`・`YS_PANEL_COLS`・`YS_BAR_FIRST_COL`、`YS_EQUIP_FRAMES`・`YS_EQUIP_W`・`YS_EQUIP_H`、`YS_MENU_FONT_TILES`。冒頭の注を「型と定数だけ」に直した |
+| `runtime/app/crop.c` | 画像の寸法のマクロを `YS_IMG_*` と `CROP_*` の別名にした。`MAP_X/Y/W/H` と `PANEL_H` は `crop.h` の `CROP_MAP_*`・`CROP_PANEL_H` と同じ値を 2 度書いていたので、そちらの別名にした |
+| `runtime/app/crop.h` | `CROP_PANEL_W/H`・`CROP_MAP_W/H/X/Y` を `YS_IMG_*` の別名にした（約 22 か所の使う側は変えない） |
+| `runtime/app/ys_panel.h` | `YS_PANEL_ROWS/COLS`・`YS_BAR_FIRST_COL` を profile に移した。`YS_PANEL_X`（枠の左の列と同じと注にあった）と `YS_PANEL_Y`（パネルの 1 行目）は `YS_IMG_FRAME_LEFT`・`YS_IMG_PANEL_Y` から |
+| `runtime/app/ys_scroll.h` | `YS_SCROLL_MAP_ROW`・`YS_SCROLL_LOW_ROW` を、注にあったとおり `YS_IMG_MAP_Y` と `YS_IMG_MAP_Y + YS_IMG_MAP_H` から（27 と 155 のまま） |
+| `runtime/app/equip.h` | `EQUIP_FRAMES/W/H` を `YS_EQUIP_*` の別名にした |
+| `runtime/app/menu_font.h` | `MENU_FONT_TILES` を `YS_MENU_FONT_TILES` の別名にした（`MENU_FONT_WORDS` とキャッシュのファイルの大きさはそこから） |
+| `tools/trace/hud_old.c` | 写していた `FRAME_LEFT`・`FRAME_RIGHT`・`PANEL_Y`・`PANEL_H`・`PANEL_W` をなくし、`YS_IMG_*` を使う（2.5 の「画面の枠の幾何」の写し） |
+
+- 名前は各モジュールの今のもの（`CROP_MAP_X`、`EQUIP_FRAMES` など）を別名として残したので、使う側（`motion.c`・`gpu_draw.c`・`battle.c`・`redraw.c`・`ys_windows.c`・`main.c`・`ys_trace_ext.c`・試験）は変えていない。
+- コードに残したもの（PC の側の配置の決めごとで、ディスクの値ではない）：`crop.c` の `LOAD_MID_Y` 37・`FRAME_BELOW` 4、`crop.h` の `CROP_FRAME_VIEW_H` 213
+  （枠の上の線 11 から、パネルの下 219 + `FRAME_BELOW` 4 = 223 まで）、`CROP_HUD_*`・`CROP_BAND_*` などの HUD の帯の大きさ。タイルの 8 ピクセル（ハードウェア）。
+- `tests/app/app_tests.c` の数字を直に書いた幾何（2.7）は変えていない。移した後もこれらの試験が北米版の値を確かめる。
+
+### 12.2 T1 の引数と理由
+
+3A-5 の引数（基準 `74019a8`）：
+
+| 引数 | 理由 |
+|---|---|
+| `--allow 8:2` | 枠の左の列 8 を 3 か所（`crop.c`、`hud_old.c`、`ys_panel.h` の `YS_PANEL_X`）に書いていた。profile には `YS_IMG_FRAME_LEFT` と `YS_BAR_FIRST_COL`（別の意味の 8）の 2 個 |
+| `--allow 24:1`、`27:2`、`128:1`、`288:1` | 地図の位置と大きさを `crop.c` と `crop.h` に 2 度書いていたもの。27 はほかに `YS_SCROLL_MAP_ROW` |
+| `--allow 155:1` | `YS_SCROLL_LOW_ROW` を `YS_IMG_MAP_Y + YS_IMG_MAP_H` にした |
+| `--allow 41:2`、`179:2`、`320:1`、`327:1` | パネルと枠の寸法を `crop.c`・`crop.h`・`ys_panel.h`・`hud_old.c` に何度も書いていたもの |
+
+### 12.3 確かめたこと
+
+| 確かめたこと | 結果 |
+|---|---|
+| T1（12.2 の引数） | **OK** [C]。数字 25 個が、コードから消えて profile に入った |
+| T1 がわざと変えた値を見つけるか | 見つけた [C]：`YS_IMG_PANEL_Y` 179 → 180、`YS_EQUIP_FRAMES` 36 → 37、`YS_IMG_MAP_H` 128 → 129 の 3 つ（それぞれ差 2 件）。確かめたあと、ファイルは元に戻した（`cmp` で同じ） |
+| `check_layers.py --pcerecomp external/PCERecomp` | **OK** [C] |
+| ビルド（`scripts/build.sh`） | 警告 0 [C] |
+| 試験の名前と本数 | 前と同じ 100 本 [C] |
+| `ctest -LE history -j 4 --repeat until-pass:2` | **90 本のうち 89 本合格、skip 1 本（`perf_ys`）、失敗 0**（1209 秒）[C]。やり直しになった試験はない。`app_prep_ys` は 1 回目で合格（139 秒）。実時間の試験も、しきい値を変えずに合格（K3） |
+| history（`scripts/build.sh --test-hist`） | **10 本すべて合格**、失敗 0 [C] |
+
+- 3A-5 で触れた定数は、枠と HUD の試験（`app_tests` の数字を直に書いた幾何、2.7）、`windows_crop_ys`、装備の試験（`equip_*`）、
+  `hud_old.c` を使う `--crop-log` の試験（`save_window_ring_ys`、`crop_flash_ys`、`equipment_ys` ほか）、history の滑らかな動き・切り抜きの試験で通っている。
+- 次に history を回すのは 3A-7（3.2 のとおり）。
+- Windows での確認は 3A-7 でまとめて行う（Q9）。

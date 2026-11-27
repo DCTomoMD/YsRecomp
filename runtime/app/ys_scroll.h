@@ -17,11 +17,12 @@
 #define PCE_APP_YS_SCROLL_H
 #include <stdint.h>
 #include "pce/pce.h"
+#include "profile/ys_profile.h"
 
 /* Image lines where the map and the lower frame start when the change arrives on time (made on the previous
  * line: 26 and 154 in every on-time frame of the sessions; = CROP_MAP_Y and CROP_MAP_Y + CROP_MAP_H) */
-#define YS_SCROLL_MAP_ROW 27
-#define YS_SCROLL_LOW_ROW 155
+#define YS_SCROLL_MAP_ROW YS_IMG_MAP_Y
+#define YS_SCROLL_LOW_ROW (YS_IMG_MAP_Y + YS_IMG_MAP_H)
 
 /* The changes of one frame (the one at the start of the map and the one at the end; the ring wrap between them, if any) */
 typedef struct YsScrollFrame {

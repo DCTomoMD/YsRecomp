@@ -3,7 +3,7 @@
  * texts that name it, as plain data. Each executable links exactly one profile_<edition>.c, which defines
  * g_ys_profile; the common code reads it and never asks which edition it is.
  *
- * Types only: plain C, no OS headers, no SDL, nothing from app/ or host/ (tools/check_layers.py).
+ * Types and constants only: plain C, no OS headers, no SDL, nothing from app/ or host/ (tools/check_layers.py).
  */
 #ifndef YS_PROFILE_H
 #define YS_PROFILE_H
@@ -264,5 +264,41 @@ typedef struct YsProfile {
 } YsProfile;
 
 extern const YsProfile g_ys_profile;
+
+/*
+ * Constants (stage 3A-5, review_jp/05 Q2): the geometry of the game's image that many files use and the sizes of
+ * arrays (and of a cache file). They stay compile-time constants, gathered here; the values are the USA edition's.
+ * [A] the same in both editions: not yet checked on the Japanese disc (review_jp/01 U12). If it differs, these move
+ * into the profile structures then.
+ */
+/* The game image (the border, the map and the panel), in console image pixels */
+#define YS_IMG_FRAME_LEFT 8      /* border outline columns */
+#define YS_IMG_FRAME_RIGHT 327
+#define YS_IMG_FRAME_TOP 11      /* outline lines */
+#define YS_IMG_FRAME_MAP_TOP 25
+#define YS_IMG_FRAME_MAP_BOTTOM 156
+#define YS_IMG_FRAME_BOTTOM 170
+#define YS_IMG_MAP_X 24          /* the map: columns 24-311, lines 27-154 */
+#define YS_IMG_MAP_Y 27
+#define YS_IMG_MAP_W 288
+#define YS_IMG_MAP_H 128
+#define YS_IMG_PANEL_TOP 171     /* 171-178 black; the panel 179-219, columns 8-327 */
+#define YS_IMG_PANEL_Y 179
+#define YS_IMG_PANEL_W 320
+#define YS_IMG_PANEL_H 41
+#define YS_IMG_LOAD_INNER_BOTTOM 218 /* load screen: inner area down to 218, outlines on lines 220 and 234 */
+#define YS_IMG_LOAD_BOTTOM 234
+#define YS_IMG_MIN_W 336         /* the smallest image of the game screen */
+#define YS_IMG_MIN_H 220
+/* The panel in the background map: 8-line cells (text, outline, player bar, outline, enemy bar, outline) */
+#define YS_PANEL_ROWS 6
+#define YS_PANEL_COLS 40
+#define YS_BAR_FIRST_COL 8 /* 1st inner cell of the bar (the left side is at 7) */
+/* Adol's frames for the equipment (16x32 sprites) */
+#define YS_EQUIP_FRAMES 36
+#define YS_EQUIP_W 16
+#define YS_EQUIP_H 32
+/* The game's 8x8 font copied for the menu (also the size of the cache file, with the little arrow) */
+#define YS_MENU_FONT_TILES 39
 
 #endif

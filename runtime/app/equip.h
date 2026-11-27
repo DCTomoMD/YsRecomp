@@ -14,12 +14,14 @@
 
 #include <stdint.h>
 
+#include "profile/ys_profile.h"
+
 struct Pce;
 struct YsFadeFrame;
 
-#define EQUIP_FRAMES 36
-#define EQUIP_W 16
-#define EQUIP_H 32
+#define EQUIP_FRAMES YS_EQUIP_FRAMES /* profile/ys_profile.h */
+#define EQUIP_W YS_EQUIP_W
+#define EQUIP_H YS_EQUIP_H
 
 enum { EQUIP_SET_NOSWORD, EQUIP_SET_SWORD, EQUIP_SET_SS }; /* without sword, with sword, with sword and shield */
 enum { EQUIP_GAME_NONE, EQUIP_GAME_YS1, EQUIP_GAME_YS2 };

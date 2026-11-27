@@ -2,11 +2,12 @@
  * the new one (from the panel cells, app/ys_panel.h) in every session: pce_trace --crop-log, "panel from the game". */
 #include "hud_old.h"
 
-#define FRAME_LEFT 8
-#define FRAME_RIGHT 327
-#define PANEL_Y 179
-#define PANEL_H 41
-#define PANEL_W 320
+/* the game image's geometry: profile/ys_profile.h (through app/crop.h) */
+#define FRAME_LEFT YS_IMG_FRAME_LEFT
+#define FRAME_RIGHT YS_IMG_FRAME_RIGHT
+#define PANEL_Y YS_IMG_PANEL_Y
+#define PANEL_H YS_IMG_PANEL_H
+#define PANEL_W YS_IMG_PANEL_W
 #define WHITE 0xFFFFFFu
 #define BAR_MIN 64
 #define HUD_TEXT_Y PANEL_Y

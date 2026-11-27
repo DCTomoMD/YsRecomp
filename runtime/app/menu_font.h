@@ -18,7 +18,7 @@
 #include "profile/ys_profile.h"
 
 #define MENU_FONT_FIRST (g_ys_profile.menu_font->first) /* the tiles: MENU_FONT_TILES from here */
-#define MENU_FONT_TILES 39
+#define MENU_FONT_TILES YS_MENU_FONT_TILES
 #define MENU_FONT_ARROW (g_ys_profile.menu_font->arrow)
 #define MENU_FONT_WORDS ((MENU_FONT_TILES + 1) * 16) /* the 39 tiles and the little arrow */
 #define MENU_FONT_CRC (g_ys_profile.menu_font->crc) /* CRC32 of the MENU_FONT_WORDS words (little-endian), checked in the game */

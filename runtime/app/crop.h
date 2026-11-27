@@ -65,6 +65,7 @@
 
 #include "app/fade.h"
 #include "app/ys_panel.h"
+#include "profile/ys_profile.h" /* the game image's geometry (YS_IMG_*) */
 
 enum { CROP_OFF, CROP_FRAME, CROP_FULL, CROP_COMPACT, CROP_WIDE, CROP_FILL, CROP_COUNT };
 #define CROP_IS_BAND(mode) ((mode) >= CROP_FULL && (mode) <= CROP_FILL) /* HUD in two lines below the map */
@@ -76,12 +77,12 @@ enum { CROP_HUD_BLACK, CROP_HUD_CHARCOAL, CROP_HUD_SLATE, CROP_HUD_MIDNIGHT, CRO
        CROP_HUD_PLUM, CROP_HUD_WINE, CROP_HUD_OXBLOOD, CROP_HUD_LEATHER, CROP_HUD_WALNUT, CROP_HUD_PETROL,
        CROP_HUD_DEEPSEA, CROP_HUD_PINE, CROP_HUD_SHADOW, CROP_HUD_COUNT };
 #define CROP_HUD_H 38 /* lines of the HUD band in full (below the map) */
-#define CROP_PANEL_W 320 /* the game's panel: columns 8-327, lines 179-219 */
-#define CROP_PANEL_H 41
-#define CROP_MAP_W 288         /* map columns */
-#define CROP_MAP_H 128         /* map lines in full */
-#define CROP_MAP_X 24          /* the map in the console image: columns 24-311, lines 27-154 */
-#define CROP_MAP_Y 27
+#define CROP_PANEL_W YS_IMG_PANEL_W /* the game's panel: columns 8-327, lines 179-219 */
+#define CROP_PANEL_H YS_IMG_PANEL_H
+#define CROP_MAP_W YS_IMG_MAP_W     /* map columns */
+#define CROP_MAP_H YS_IMG_MAP_H     /* map lines in full */
+#define CROP_MAP_X YS_IMG_MAP_X     /* the map in the console image: columns 24-311, lines 27-154 */
+#define CROP_MAP_Y YS_IMG_MAP_Y
 #define CROP_FRAME_VIEW_H 213  /* image lines in frame mode (11-223) */
 /* Compact, wide and fill: the map at line 0 and the HUD band below (text lines at 132 and 143) */
 #define CROP_BAND_H 26

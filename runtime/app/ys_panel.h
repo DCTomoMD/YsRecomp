@@ -26,10 +26,10 @@
 
 #include "profile/ys_profile.h"
 
-#define YS_PANEL_X 8    /* 1st column of the panel in the image (the frame's) */
-#define YS_PANEL_Y 179  /* 1st line of the panel in the image: the text's */
-#define YS_PANEL_ROWS 6 /* 8-line cells: text, outline, player bar, outline, enemy bar, outline */
-#define YS_PANEL_COLS 40
+/* YS_PANEL_ROWS (8-line cells: text, outline, player bar, outline, enemy bar, outline), YS_PANEL_COLS and
+ * YS_BAR_FIRST_COL: profile/ys_profile.h */
+#define YS_PANEL_X YS_IMG_FRAME_LEFT /* 1st column of the panel in the image (the frame's) */
+#define YS_PANEL_Y YS_IMG_PANEL_Y    /* 1st line of the panel in the image: the text's */
 #define YS_PANEL_W (YS_PANEL_COLS * 8)
 #define YS_PANEL_H (YS_PANEL_ROWS * 8)
 
@@ -49,7 +49,6 @@
 #define YS_TILE_BAR_SIDE (g_ys_profile.panel->tile_bar_side)
 #define YS_TILE_BAR_YELLOW (g_ys_profile.panel->tile_bar_yellow) /* 8 HP points left */
 #define YS_TILE_BAR_RED (g_ys_profile.panel->tile_bar_red)       /* 8 HP points lost */
-#define YS_BAR_FIRST_COL 8     /* 1st inner cell of the bar (the left side is at 7) */
 
 typedef struct YsPanel {
     uint8_t valid; /* the panel is on whole map cells ($2212 + 1 and $220E multiples of 8) */
