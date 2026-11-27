@@ -2,25 +2,21 @@
 #include "app/ys_dialog.h"
 
 #include "cd/cdrom.h"
+#include "profile/ys_profile.h"
 
-#define SPEED 0x27F6 /* speed of the text task, index X */
+/* The speed test and its signature (from the accumulator's LDA of the speed to the wait for the next frame):
+ * g_ys_profile.dialog */
 
-/* From the accumulator's LDA $27F6,X to the JSR $402A (wait for the next frame); the speed test is byte 10:
- * LDA $27F6,X; CLC; ADC $2826,X; STA $2826,X; LDA $27F6,X; BEQ +$1D; LDA $2826,X; SEC; SBC $92; BCS +$12; JSR $402A */
-static const uint8_t k_sig[26] = { 0xBD, 0xF6, 0x27, 0x18, 0x7D, 0x26, 0x28, 0x9D, 0x26, 0x28, 0xBD, 0xF6, 0x27,
-                                   0xF0, 0x1D, 0xBD, 0x26, 0x28, 0x38, 0xE5, 0x92, 0xB0, 0x12, 0x20, 0x2A, 0x40 };
-#define SIG_TEST 10
-
-#define SIG_WAIT 23 /* the JSR $402A: the text waits for the next frame for the next letter */
-
-/* test = address of the speed test in one of the three disc programs that have the text program (bank $80
+/* test = address of the speed test in one of the three disc programs that have the text program (the profile's bank
  * in window 2), checked against the bytes */
 static int sig_ok(const Pce *pce, uint16_t test)
 {
-    if ((test != 0x58D6 && test != 0x5BD0 && test != 0x5BD5) || pce->cpu.mpr[2] != 0x80 || !pce->cd)
+    const YsDialogProfile *p = g_ys_profile.dialog;
+    if ((test != p->test_pc[0] && test != p->test_pc[1] && test != p->test_pc[2]) || pce->cpu.mpr[2] != p->bank ||
+        !pce->cd)
         return 0;
-    for (int k = 0; k < (int)sizeof(k_sig); k++)
-        if (pce->cd->ram[(test - SIG_TEST + k) & 0x1FFF] != k_sig[k])
+    for (int k = 0; k < (int)sizeof(p->sig); k++)
+        if (pce->cd->ram[(p->bank - 0x80) * 0x2000 + ((test - p->sig_test + k) & 0x1FFF)] != p->sig[k])
             return 0;
     return 1;
 }
@@ -32,14 +28,15 @@ int ys_dialog_at(const Pce *pce)
 
 int ys_dialog_wait_at(const Pce *pce)
 {
-    return sig_ok(pce, (uint16_t)(pce->cpu.pc - (SIG_WAIT - SIG_TEST)));
+    const YsDialogProfile *p = g_ys_profile.dialog;
+    return sig_ok(pce, (uint16_t)(pce->cpu.pc - (p->sig_wait - p->sig_test)));
 }
 
 void ys_dialog_patch(Pce *pce)
 {
     if (!ys_dialog_at(pce))
         return;
-    uint32_t addr = 0xF8u * 0x2000 + ((SPEED + pce->cpu.x) & 0x1FFF);
+    uint32_t addr = 0xF8u * 0x2000 + ((g_ys_profile.dialog->speed + pce->cpu.x) & 0x1FFF);
     if (pce_bus_read(pce, addr) != 0)
         pce_bus_write(pce, addr, 0);
 }

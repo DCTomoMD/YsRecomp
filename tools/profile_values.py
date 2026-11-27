@@ -10,10 +10,16 @@ Comments, spacing and #include paths are ignored; adjacent string literals are j
 that left the code for another reason (for example "sizeof(x) - 1" replaced by strlen) are given with
 --allow VALUE:COUNT, and the reason goes in the stage's notes. The count is over all the files together, so a number
 written anew in the code (a loop that now starts at 0, "base + 1" for the 2nd byte of a value) hides as many moved ones:
-those are given with --new VALUE:COUNT (at most as many as the code now has), also explained in the notes. Numbers and
-strings that are new in the code are listed for review, not counted as errors.
+those are given with --new VALUE:COUNT (at most as many as the code now has), also explained in the notes. Two rules
+for values written another way (review_jp/05, Q5 and chapter 4):
+  --ram OFFSET:COUNT  a RAM address that left the code as an offset from $2000 (ram[OFFSET]) and entered the profile
+                      as the CPU address OFFSET + 0x2000;
+  --dim VALUE:COUNT   the size of a new array of the profile, holding values the code wrote one by one before (three
+                      comparisons become test_pc[3]): it entered the profile without leaving the code.
+Numbers and strings that are new in the code are listed for review, not counted as errors.
 
-Usage: python tools/profile_values.py BASE [--allow VALUE:COUNT ...] [--new VALUE:COUNT ...] [--show]
+Usage: python tools/profile_values.py BASE [--allow VALUE:COUNT ...] [--new VALUE:COUNT ...] [--ram OFFSET:COUNT ...]
+                                           [--dim VALUE:COUNT ...] [--show]
 Exit: 0 = the values match, 1 = some difference (listed), 2 = usage error.
 Reads no ROM: only the project's sources.
 """
@@ -119,6 +125,10 @@ def main():
                     help="a number that left the code for another reason (say why in the stage's notes)")
     ap.add_argument("--new", action="append", default=[], metavar="VALUE:COUNT",
                     help="a number written anew in the code, hiding a moved one (say why in the stage's notes)")
+    ap.add_argument("--ram", action="append", default=[], metavar="OFFSET:COUNT",
+                    help="a RAM offset from $2000 that entered the profile as the CPU address OFFSET + 0x2000")
+    ap.add_argument("--dim", action="append", default=[], metavar="VALUE:COUNT",
+                    help="the size of a new profile array holding values the code wrote one by one")
     ap.add_argument("--show", action="store_true", help="also list every value that matched")
     a = ap.parse_args()
     try:
@@ -129,7 +139,10 @@ def main():
 
     code_old, code_new = literals(base_files(a.base, CODE)), literals(tree_files(CODE))
     prof_old, prof_new = literals(base_files(a.base, PROFILE)), literals(tree_files(PROFILE))
-    left_n, entered_n = code_old[0] - code_new[0], prof_new[0] - prof_old[0]
+    # signed counts: a value the code now has more of than before must stay negative until --new is added
+    left_n = Counter(code_old[0])
+    left_n.subtract(code_new[0])
+    entered_n = prof_new[0] - prof_old[0]
     new_code_n = code_new[0] - code_old[0]
     left_s, entered_s = code_old[1] - code_new[1], prof_new[1] - prof_old[1]
     new_code_s = code_new[1] - code_old[1]
@@ -141,20 +154,28 @@ def main():
             out[c_int(v)] += int(c or 1)
         return out
 
-    allowed, written = counts(a.allow), counts(a.new)
+    allowed, written, ram, dims = counts(a.allow), counts(a.new), counts(a.ram), counts(a.dim)
     problems = []
 
     # numbers written anew in the code hide as many moved ones: count those as having left
     extra_new = Counter({v: c - code_new[0][v] for v, c in written.items() if c > code_new[0][v]})
     if extra_new:
         problems.append(f"--new more than the code has: {dict(extra_new)}")
-    left_n = left_n + written
+    left_n.update(written)
 
     # numbers: what left the code (less the allowed ones) = what entered the profile
-    extra_allowed = allowed - left_n
+    extra_allowed = Counter({v: c - max(left_n[v], 0) for v, c in allowed.items() if c > left_n[v]})
     if extra_allowed:
         problems.append(f"--allow more than left the code: {dict(extra_allowed)}")
-    left_n = left_n - allowed
+    left_n.subtract(allowed)
+    for v, c in ram.items():  # left as an offset, entered as the address
+        if c > left_n[v]:
+            problems.append(f"--ram more than left the code: {v} (0x{v:X})")
+        left_n[v] -= c
+        left_n[v + 0x2000] += c
+    # still negative: new in the code (listed for review, as before)
+    left_n = Counter({v: c for v, c in left_n.items() if c > 0})
+    left_n.update(dims)  # entered the profile with no literal in the code before
     for v in sorted(set(left_n) | set(entered_n)):
         if left_n[v] != entered_n[v]:
             problems.append(f"number {v} (0x{v:X}): left the code {left_n[v]} time(s), entered the profile "
@@ -187,7 +208,8 @@ def main():
 
     print(f"profile_values: base {a.base}")
     print(f"  numbers: {sum(left_n.values())} left the code (+{sum(allowed.values())} allowed; "
-          f"{sum(written.values())} counted with --new), "
+          f"{sum(written.values())} counted with --new, {sum(ram.values())} with --ram, "
+          f"{sum(dims.values())} with --dim), "
           f"{sum(entered_n.values())} entered the profile")
     print(f"  strings: {sum(left_s.values())} left the code, {sum(entered_s.values())} entered the profile")
     if a.show:

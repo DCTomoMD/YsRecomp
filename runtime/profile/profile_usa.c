@@ -83,6 +83,89 @@ static const YsRewardProfile k_reward = {
     .exp = 0x2ABB,
 };
 
+/* docs/ys_notes.md, "The game's window system": routines of bank $81 of the CD RAM in the $6000-$7FFF window */
+static const YsWindowsProfile k_windows = {
+    .bank = 0x81,
+    .hooks = {
+        /* JSR $6148 (sound) / JSR $6061 (border) */
+        [YS_WIN_HOOK_OPENING] = { 0x6031, { 0x20, 0x48, 0x61, 0x20, 0x61 }, 0 },
+        /* (border done) JSR (masks) / JSR $617F; the masks' address: $80:4E2F in Ys I, $80:4F78 in Ys II */
+        [YS_WIN_HOOK_DRAWN] = { 0x6037, { 0x20, 0x78, 0x4F, 0x20, 0x7F }, 6 },
+        /* INC $3E / RTS */
+        [YS_WIN_HOOK_OPEN] = { 0x6040, { 0xE6, 0x3E, 0x60, 0xA5, 0x3E }, 0 },
+        /* JSR $61DE / LDA $43 */
+        [YS_WIN_HOOK_CLOSING] = { 0x604D, { 0x20, 0xDE, 0x61, 0xA5, 0x43 }, 0 },
+        /* (background restored by $60F5) JSR $6143 / JSR $6157 */
+        [YS_WIN_HOOK_RESTORED] = { 0x6057, { 0x20, 0x43, 0x61, 0x20, 0x57 }, 0 },
+        /* JSR (masks) / RTS; also called without closing ($605A) */
+        [YS_WIN_HOOK_CLOSED] = { 0x605D, { 0x20, 0x78, 0x4F, 0x60, 0xA5 }, 6 },
+    },
+    /* docs/ys_notes.md, "Large menu screens": $82:7AF6 enters the single scroll, $82:7B2F goes back; the hooks are on
+     * the instructions that pick the interrupt line ($2210 = $68 / $148) */
+    .layout_bank = 0x82,
+    .one_scroll_pc = { 0x7AFC, 0x7AAB },
+    .one_scroll_sig = { 0x17, 0xF5, 0xA9, 0x68, 0x8D, 0x10, 0x22, 0xA9, 0x00, 0x8D, 0x11, 0x22 },
+    .split_pc = { 0x7B32, 0x7AE1 },
+    .split_sig = { 0xA9, 0x48, 0x8D, 0x10, 0x22, 0xA9, 0x01, 0x8D, 0x11, 0x22, 0x20, 0xB1, 0x53 },
+    .count = 0x203E,
+    .rect = 0x203F,
+    .camera_x = 0x2C37,
+    .camera_y = 0x2C39,
+    .stack_len = 0x33C6,
+    .stack = 0x33C7,
+};
+
+/* docs/ys_notes.md, "Intro" (app/ys_intro.h): bank $80 in window 2 */
+static const YsIntroProfile k_intro = {
+    .bank = 0x80,
+    .script_pc = 0x5AA4,
+    .script_sig = { 0xB2, 0x62, 0xC9, 0xFF }, /* LDA ($62); CMP #$FF */
+    .menu_pc = 0x494C,
+    .menu_sig = { 0xA9, 0x08, 0x8D, 0xBF, 0x2E }, /* LDA #$08; STA $2EBF (only RUN counts) */
+    .screens = {
+        [YS_INTRO_OP_NEC] = { 0x4C4A, { 0x18, 0x06, 0x00, 0x00, 0x05, 0x00, 0x00, 0x02, 0x00 } },
+        [YS_INTRO_OP_LOGO] = { 0x4C6D, { 0x18, 0x06, 0x00, 0x00, 0x05, 0x00, 0x00, 0x01, 0x00 } },
+        [YS_INTRO_OP_COPYRIGHT] = { 0x4D3D, { 0x18, 0x06, 0x00, 0x00, 0x05, 0x00, 0x00, 0xFF, 0x00 } },
+    },
+    .script = 0x2062,
+    .lock = 0x203A,
+    .flags = 0x2024,
+    .hurry = 1,
+    .mask = 0x2EBF,
+};
+
+/* app/ys_dialog.h: LDA $27F6,X; CLC; ADC $2826,X; STA $2826,X; LDA $27F6,X; BEQ +$1D; LDA $2826,X; SEC; SBC $92;
+ * BCS +$12; JSR $402A */
+static const YsDialogProfile k_dialog = {
+    .bank = 0x80,
+    .test_pc = { 0x58D6, 0x5BD0, 0x5BD5 },
+    .sig = { 0xBD, 0xF6, 0x27, 0x18, 0x7D, 0x26, 0x28, 0x9D, 0x26, 0x28, 0xBD, 0xF6, 0x27,
+             0xF0, 0x1D, 0xBD, 0x26, 0x28, 0x38, 0xE5, 0x92, 0xB0, 0x12, 0x20, 0x2A, 0x40 },
+    .sig_test = 10, /* the LDA $27F6,X before the BEQ */
+    .sig_wait = 23, /* the JSR $402A */
+    .speed = 0x27F6,
+};
+
+/* docs/ys_notes.md, "Game fades" */
+static const YsFadeProfile k_fade = {
+    /* STX zp_lo; STA zp_lo+1; TXA; AND #7; ASL; ASL; ASL; ORA level; TAX; LDA table,X; then, in the programs' one:
+     * STA $88 (0x85); in the scenes' one: ADC brightening (0x65 zp) */
+    .transform = { 0x86, 0xFFFF, 0x85, 0xFFFF, 0x8A, 0x29, 0x07, 0x0A, 0x0A, 0x0A,
+                   0x05, 0xFFFF, 0xAA, 0xBD, 0xFFFF, 0xFFFF },
+    .level_at = 11,
+    .table_at = 14,
+    .family_at = 16,
+    .scenes_op = 0x65,
+    /* the caller: (LDA zp;) DEY; STA (dest),Y */
+    .caller_skip_op = 0xA5,
+    .caller_op = { 0x88, 0x91 },
+    /* LDA (zp); TAX; AND #7; TAY; LDA table,Y; STA $00; TXA; AND #$38; CMP #$38; BEQ +2; ADC #8 */
+    .flash = { 0xB2, 0xFFFF, 0xAA, 0x29, 0x07, 0xA8, 0xB9, 0xFFFF, 0xFFFF, 0x85, 0x00,
+               0x8A, 0x29, 0x38, 0xC9, 0x38, 0xF0, 0x02, 0x69, 0x08 },
+    .flash_zp_at = 1,
+    .colors = 0x3C00,
+};
+
 const YsProfile g_ys_profile = {
     .identity = &k_identity,
     .disc = &k_disc,
@@ -90,4 +173,8 @@ const YsProfile g_ys_profile = {
     .screen = &k_screen,
     .scroll = &k_scroll,
     .reward = &k_reward,
+    .windows = &k_windows,
+    .intro = &k_intro,
+    .dialog = &k_dialog,
+    .fade = &k_fade,
 };

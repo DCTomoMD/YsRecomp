@@ -321,3 +321,84 @@ T1 は全ファイルを合わせて数えるので、コードに新しく書�
 
 - history は 3A-4・3A-5 の後と 3A-7 で回す（3.2 のとおり）。3A-2 で触れたフックは、セッションの試験（`session_ys_*`）と枠・HUD の試験で通っている。
 - Windows での確認は 3A-7 でまとめて行う（Q9）。
+
+---
+
+## 10. 3A-3 の結果（2026-11-27、macOS）
+
+基準は `aaff255`（3A-1・3A-2 のコミット `6840786` の次の、`build.bat` のコミット。3A の値には触れていない）。
+
+### 10.1 変えたもの
+
+| ファイル | 内容 |
+|---|---|
+| `runtime/profile/ys_profile.h` | `YsWindowsProfile`（と `YsWindowsHook`、`YS_WIN_HOOK_*`）、`YsIntroProfile`（と `YsIntroOp`、`YS_INTRO_OP_*`）、`YsDialogProfile`、`YsFadeProfile`。`YsProfile` に `windows`・`intro`・`dialog`・`fade` を足した。表の形は各モジュールの今の形のまま（Q6） |
+| `runtime/profile/profile_usa.c` | 4 つのモジュールの北米版の値。値は変えずに移した |
+| `runtime/app/ys_windows.c` | フック 6 行とバンク `$81`、レイアウト切替のバンク `$82`・PC 4 つ・命令列 2 本、RAM（`$203E`、`$203F`〜`$2043`、カメラ `$2C37`〜`$2C3A`、スタック `$33C6`・`$33C7`）を `g_ys_profile.windows` から。`switch` の case（PC 4 つ）は、case の順のまま表を引く `for` に替えた（K2）。フックの enum `HOOK_*` は profile の `YS_WIN_HOOK_*` に（表の順を決めるため。値と順は同じ） |
+| `runtime/app/ys_intro.c` | プログラム番号の写し `INTRO_PROGRAM 0x04` をやめ、`g_ys_profile.screen->intro_program` を読む。スクリプトとメニューの PC・シグネチャ・バンク、画面の操作 3 行、RAM（`$2062/63`、`$203A`、`$2024` とその bit 0、`$2EBF`）を `g_ys_profile.intro` から。列挙 `IntroScreen` はコードに残し、profile の行の順（`YS_INTRO_OP_*`）から列挙への対応表 `k_screen_of` を置いた（2.2） |
+| `runtime/app/ys_dialog.c` | 速さの RAM `$27F6`、シグネチャ 26 バイト、試験と待ちの位置（10、23）、3 つのプログラムの PC、バンク `$80` を `g_ys_profile.dialog` から |
+| `runtime/app/ys_fade.c` | 命令列 2 本（ワイルドカード付き）、その中の位置（段階 11、表 14、種類 16、閃光の zp 1）、種類を見分けるバイト `$65`、呼び手の命令（`$A5`、`$88 $91`）、色の RAM `$3C00` を `g_ys_profile.fade` から。命令列の先頭のバイトで分ける `op == 0x86`・`op == 0xB2`（2.2 の `ys_fade.c:188, 191`）は、`transform[0]`・`flash[0]` との比較に替えた。順は同じ |
+| `tools/profile_values.py` | 数え方の不具合を直し、`--ram` と `--dim` を足した（10.2） |
+
+- 手で導いていた PC の範囲（`ys_windows.c:65` の `0x6031`〜`0x605D`）は、3A-2 と同じく、profile の表の最小値と最大値から初めてのフックのときに 1 回だけ計算する。
+- `0x13C7`（`0x33C7 - 0x2000` を手で計算した値。`ys_windows.c:216-217`）は、「RAM の終わりまでの残り」`sizeof(pce->ram) - (stack - 0x2000)` で profile の `stack` から導く。値は前と同じ `0x0C39`。
+- 2 バイト目以降の番地（`$2040`〜`$2043`、`$2C38`、`$2C3A`、`$2063`）は「先頭 + n」で読む。profile には先頭だけを置く。
+  `$2C39` は 16 ビットのカメラ X の次の値（カメラ Y）なので、`camera_y` として別に置いた。`$33C6`（長さ）と `$33C7`（中身）も、意味が違うので別に置いた [C: どちらも元のコードが別々に読んでいた番地]。
+- `ys_intro.c` の RAM は、`$2000` からの差（`pce->ram[0x3A]` など）から、CPU から見た番地（`RAM(pce, 0x203A)`）に直した（Q5）。
+- `ys_dialog.c` のシグネチャは CD RAM から直に読む。前は `& 0x1FFF` でバンク `$80`（CD RAM の先頭）を前提にしていたが、
+  バンクを profile から読むようになったので、CD RAM の中の位置を `(bank - 0x80) * 0x2000` で足した。北米版ではバンクが `$80` なので 0 で、結果は同じ。
+- コードに残したもの：`$2200-$22FF`（`ys_fade.c` の `$221F`、`$2220`、`$2222`。Q3）、CD RAM のバンク `$80`〜`$87`・RAM のバンク `$F8`・
+  スタックのページ `$100`・色のマスク `$1FF`・VCE の 512 色（ハードウェア）、色の RAM の大きさ `0x400`（配列 `YsFade.ram[512]` の大きさ。Q2）、
+  フェードの表の 8×8、マップの 64×32・アクターのフラグ `0x20`（Q8）、スプライトの SAT の差 32・88（ハードウェア）、`CROP_MAP_*`（3A-5）。
+  `tools/trace/ys_trace_ext.c` の `$203E`・`$27F6` の写し（2.5）は 3A-6 で直す。
+
+### 10.2 T1 の直しと、引数の理由
+
+**直したこと**：コードから消えた数を `Counter` の引き算で数えていたため、ある数がコードで「消えた数より新しく書いた数のほうが多い」とき、
+差が 0 に切り捨てられ、そのあとで `--new` を足していた。このため `--new` が実際より少なくても OK になることがあった。
+符号付きで数え、`--new`・`--allow` を引いたあとで負の数（コードに新しく書いた数。前と同じく一覧に出すだけ）を 0 にするように直した。
+
+- この直しで 3A-1・3A-2 を数え直すと（`HEAD` の木を取り出し、基準 `3956404`）、9.2 の引数のうち `--new 1:6` は **`--new 1:7`** が正しい。
+  7 個目は `ys_reward.c` の `g_pc_range = 1`（9.2 では `ys_scroll.c` の `map_x + 1` を 3 か所と数えていたが、実際は 2 か所と `g_pc_range = 1`）。
+  `--new 1:7` で OK になる [C]。値の移し方に誤りはなく、引数の説明だけの誤り。
+- 足した規則（4 章の「変換の規則を道具に持たせる」）：
+  - `--ram OFFSET:COUNT`：`$2000` からの差（`ram[OFFSET]`）でコードから消え、CPU の番地 `OFFSET + 0x2000` で profile に入った（Q5）。
+  - `--dim VALUE:COUNT`：別々に書いていた値をまとめた、profile の新しい配列の大きさ（3 つの比較が `test_pc[3]` になる、など）。コードからは消えずに profile に入る。
+
+3A-3 の引数（基準 `aaff255`）：
+
+| 引数 | 理由 |
+|---|---|
+| `--allow 0x6031:1`、`0x605D:1` | 手で導いていた PC の範囲を、表から計算する形にした |
+| `--allow 0x13C7:2` | 手で計算した値を、`stack` から導く形にした |
+| `--allow 0x203E:1`、`0x203F:1`、`0x2040:3`、`0x2041:2`、`0x2042:2`、`0x2043:2` | 同じ番地を何度も読んでいたものと、2 バイト目以降を「`rect` + n」にしたもの |
+| `--allow 0x2C38:1`、`0x2C3A:1` | カメラの上のバイトを「+ 1」にした |
+| `--allow 0x63:1` | スクリプトのポインタの上のバイトを「`script` + 1」にした |
+| `--allow 0x04:1` | `ys_intro.c` のプログラム番号の写し（profile の `intro_program` は 3A-2 で入っている） |
+| `--allow 0x86:1`、`0xB2:1` | `op == 0x86`・`op == 0xB2` を、命令列の先頭のバイトとの比較にした |
+| `--allow 5:1` | シグネチャを比べるループの上限 `k < 5` を `sizeof` に替えた |
+| `--allow 15:1`、`17:1` | `pc + 15`・`pc + 17` を `table_at + 1`・`family_at + 1` にした |
+| `--allow 0:2` | 表の大きさの `sizeof(k_hooks[0])`・`sizeof(k_screens[0])` をなくした |
+| `--new 0:13` | `ys_windows.c` の 7（`one_scroll_pc[0]`・`split_pc[0]`、ループの `k = 0` 2 つ、`hooks[0]`、`rect_byte(pce, 0)` 2 つ）、`ys_dialog.c` の `test_pc[0]`、`ys_fade.c` の 5（`transform[0]` 2 つ、`flash[0]` 2 つ、`caller_op[0]`） |
+| `--new 1:12` | `ys_windows.c` の 7（`h = 1`、`g_pc_range = 1`、カメラの `+ 1` 2 つ、`rect_byte(pce, 1)` 3 つ）、`ys_intro.c` の `script + 1`、`ys_dialog.c` の `test_pc[1]`、`ys_fade.c` の 3（`table_at + 1`、`family_at + 1`、`caller_op[1]`） |
+| `--new 2:3`、`3:2`、`4:2` | `rect_byte(pce, 2)` 2 つと `test_pc[2]`、`rect_byte(pce, 3)` 2 つ、`rect_byte(pce, 4)` 2 つ |
+| `--new 0x80:1` | `ys_dialog.c` の CD RAM の先頭のバンク（ハードウェア）。北米版のバンク `$80` は profile に移った |
+| `--ram 0x24:1`、`0x3A:1`、`0xEBF:1`、`0x62:1` | `ys_intro.c` の RAM を CPU の番地に直した（`$2024`、`$203A`、`$2EBF`、`$2062`） |
+| `--dim 2:3`、`3:1` | `one_scroll_pc[2]`・`split_pc[2]`（case 2 つずつ）、`caller_op[2]`（比較 2 つ）、`test_pc[3]`（比較 3 つ） |
+
+- コードに新しく書いた数（一覧に出るだけ）：`0x2000` が 1 個（`ys_intro.c` と `ys_dialog.c` に 1 個ずつ足し、`ys_windows.c` の `0x2000 - 0x13C7` 2 個を 1 個にした）。
+
+### 10.3 確かめたこと
+
+| 確かめたこと | 結果 |
+|---|---|
+| T1（10.2 の引数） | **OK** [C]。数字 217 個が、コードから消えて profile に入った（`--ram` 4、`--dim` 4 を含む）。文字列は 0 |
+| T1 がわざと変えた値を見つけるか | 見つけた [C]：フックの PC `0x604D` → `0x604E`、`mask` `0x2EBF` → `0x2EBE`、`sig_wait` 23 → 24、`colors` `0x3C00` → `0x3C01` の 4 つ（それぞれ差 2 件）。確かめたあと、ファイルは元に戻した（`cmp` で同じ） |
+| `check_layers.py --pcerecomp external/PCERecomp` | **OK** [C] |
+| ビルド（`scripts/build.sh`） | 警告 0 [C] |
+| 試験の名前と本数 | 前と同じ 100 本 [C] |
+| `ctest -LE history -j 4 --repeat until-pass:2` | **90 本のうち 89 本合格、skip 1 本（`perf_ys`）、失敗 0**（1118 秒）[C]。やり直しになった試験はない。`app_prep_ys` は 1 回目で合格（142 秒）。実時間の試験も、しきい値を変えずに合格（K3） |
+
+- history は 3A-4・3A-5 の後と 3A-7 で回す（3.2 のとおり）。3A-3 で触れたフックは、セッションの試験（`session_ys_*`）、
+  ウィンドウの試験（`windows_ys`、`windows_ys1`、`windows_crop_ys`、`window_ys`、`window_ring_ys`）、`intro_ys`、`dialog_ys`、`equip_c_ys`（`ys_fade.c`）で通っている。
+- Windows での確認は 3A-7 でまとめて行う（Q9）。

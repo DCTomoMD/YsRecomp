@@ -6,35 +6,20 @@
 
 #include <string.h>
 
+#include "profile/ys_profile.h"
+
 #define RAM(p, a) ((p)->ram[(a) - 0x2000])
 
-/* Window system routines (bank $81 of the CD RAM in the $6000-$7FFF window) and the first bytes of each one */
-static const struct {
-    uint16_t pc;
-    uint8_t sig[5];
-    uint8_t skip; /* bits of the bytes that don't count (the masks' address: $80:4E2F in Ys I, $80:4F78 in Ys II) */
-} k_hooks[] = {
-    { 0x6031, { 0x20, 0x48, 0x61, 0x20, 0x61 }, 0 }, /* JSR $6148 (sound) / JSR $6061 (border) */
-    { 0x6037, { 0x20, 0x78, 0x4F, 0x20, 0x7F }, 6 }, /* (border done) JSR (masks) / JSR $617F */
-    { 0x6040, { 0xE6, 0x3E, 0x60, 0xA5, 0x3E }, 0 }, /* INC $3E / RTS */
-    { 0x604D, { 0x20, 0xDE, 0x61, 0xA5, 0x43 }, 0 }, /* JSR $61DE / LDA $43 */
-    { 0x6057, { 0x20, 0x43, 0x61, 0x20, 0x57 }, 0 }, /* (background restored by $60F5) JSR $6143 / JSR $6157 */
-    { 0x605D, { 0x20, 0x78, 0x4F, 0x60, 0xA5 }, 6 }, /* JSR (masks) / RTS; also called without closing ($605A) */
-};
-enum { HOOK_OPENING, HOOK_DRAWN, HOOK_OPEN, HOOK_CLOSING, HOOK_RESTORED, HOOK_CLOSED };
+/* Window system routines and the first bytes of each one: g_ys_profile.windows */
 
 static uint8_t read_logical(Pce *pce, uint16_t addr)
 {
     return pce_bus_read(pce, (uint32_t)pce->cpu.mpr[addr >> 13] * 0x2000 + (addr & 0x1FFF));
 }
 
-/* Screen layout switch ($82:7AF6 enters the single scroll, $82:7B2F goes back; docs/ys_notes.md, "Large menu
- * screens"): the game saves or restores the map cells and copies the border and the panel to cells
- * 0-3 and 13-15, which only show in their place with the new scroll. Hooks on the instructions that pick the interrupt
- * line ($2210 = $68 / $148) */
-static const uint8_t k_to_one_scroll[12] = { 0x17, 0xF5, 0xA9, 0x68, 0x8D, 0x10, 0x22, 0xA9, 0x00, 0x8D, 0x11, 0x22 };
-static const uint8_t k_to_split[13] = { 0xA9, 0x48, 0x8D, 0x10, 0x22, 0xA9, 0x01, 0x8D, 0x11, 0x22, 0x20, 0xB1, 0x53 };
-
+/* Screen layout switch (docs/ys_notes.md, "Large menu screens"): the game saves or restores the map cells and copies
+ * the border and the panel to cells 0-3 and 13-15, which only show in their place with the new scroll. Hooks on the
+ * instructions that pick the interrupt line */
 static int code_is(Pce *pce, const uint8_t *sig, int n)
 {
     for (int k = 0; k < n; k++)
@@ -45,34 +30,58 @@ static int code_is(Pce *pce, const uint8_t *sig, int n)
 
 static int is_layout_switch(Pce *pce)
 {
-    if (pce->cpu.mpr[3] != 0x82)
+    const YsWindowsProfile *p = g_ys_profile.windows;
+    if (pce->cpu.mpr[3] != p->layout_bank)
         return 0;
-    switch (pce->cpu.pc) {
-    case 0x7AFC: /* Ys I */
-    case 0x7AAB: /* Ys II */
-        return code_is(pce, k_to_one_scroll, (int)sizeof(k_to_one_scroll));
-    case 0x7B32:
-    case 0x7AE1:
-        return code_is(pce, k_to_split, (int)sizeof(k_to_split));
-    default:
-        return 0;
+    /* in the order of the old switch: Ys I, Ys II to the single scroll, then back to the split */
+    for (int k = 0; k < (int)(sizeof(p->one_scroll_pc) / sizeof(p->one_scroll_pc[0])); k++)
+        if (pce->cpu.pc == p->one_scroll_pc[k])
+            return code_is(pce, p->one_scroll_sig, (int)sizeof(p->one_scroll_sig));
+    for (int k = 0; k < (int)(sizeof(p->split_pc) / sizeof(p->split_pc[0])); k++)
+        if (pce->cpu.pc == p->split_pc[k])
+            return code_is(pce, p->split_sig, (int)sizeof(p->split_sig));
+    return 0;
+}
+
+/* Lowest and highest PC of the hooks: a quick test before the table (computed once from the profile) */
+static uint16_t g_pc_min, g_pc_max;
+static int g_pc_range;
+
+static void pc_range(const YsWindowsProfile *p)
+{
+    g_pc_min = g_pc_max = p->hooks[0].pc;
+    for (int h = 1; h < YS_WIN_HOOKS; h++) {
+        if (p->hooks[h].pc < g_pc_min)
+            g_pc_min = p->hooks[h].pc;
+        if (p->hooks[h].pc > g_pc_max)
+            g_pc_max = p->hooks[h].pc;
     }
+    g_pc_range = 1;
 }
 
 static int which_hook(Pce *pce)
 {
+    const YsWindowsProfile *p = g_ys_profile.windows;
     uint16_t pc = pce->cpu.pc;
-    if (pc < 0x6031 || pc > 0x605D || pce->cpu.mpr[3] != 0x81)
+    if (!g_pc_range)
+        pc_range(p);
+    if (pc < g_pc_min || pc > g_pc_max || pce->cpu.mpr[3] != p->bank)
         return -1;
-    for (int h = 0; h < (int)(sizeof(k_hooks) / sizeof(k_hooks[0])); h++) {
-        if (k_hooks[h].pc != pc)
+    for (int h = 0; h < YS_WIN_HOOKS; h++) {
+        if (p->hooks[h].pc != pc)
             continue;
-        for (int k = 0; k < 5; k++)
-            if (!(k_hooks[h].skip >> k & 1) && read_logical(pce, (uint16_t)(pc + k)) != k_hooks[h].sig[k])
+        for (int k = 0; k < (int)sizeof(p->hooks[h].sig); k++)
+            if (!(p->hooks[h].skip >> k & 1) && read_logical(pce, (uint16_t)(pc + k)) != p->hooks[h].sig[k])
                 return -1;
         return h;
     }
     return -1;
+}
+
+/* Byte i of the current window in RAM: column, row, width, height, page */
+static uint8_t rect_byte(Pce *pce, int i)
+{
+    return RAM(pce, g_ys_profile.windows->rect + i);
 }
 
 void ys_windows_init(YsWindows *w)
@@ -87,8 +96,9 @@ void ys_windows_init(YsWindows *w)
  * window below at the map's new place; so the cell is recomputed every frame, not kept from opening time */
 static void set_bat(YsWindow *win, Pce *pce)
 {
-    uint16_t cx = (uint16_t)(RAM(pce, 0x2C37) | RAM(pce, 0x2C38) << 8);
-    uint16_t cy = (uint16_t)(RAM(pce, 0x2C39) | RAM(pce, 0x2C3A) << 8);
+    const YsWindowsProfile *p = g_ys_profile.windows;
+    uint16_t cx = (uint16_t)(RAM(pce, p->camera_x) | RAM(pce, p->camera_x + 1) << 8);
+    uint16_t cy = (uint16_t)(RAM(pce, p->camera_y) | RAM(pce, p->camera_y + 1) << 8);
     win->bat_x = (uint8_t)(((cx >> 3) + win->col) & 63);
     win->bat_y = (uint8_t)(((cy >> 3) + win->row) & 31);
 }
@@ -103,8 +113,8 @@ static int image_row(Pce *pce)
 
 static int same_rect(const YsWindow *win, Pce *pce)
 {
-    return win->col == RAM(pce, 0x203F) && win->row == RAM(pce, 0x2040) && win->w == RAM(pce, 0x2041) &&
-           win->h == RAM(pce, 0x2042) && win->page == RAM(pce, 0x2043);
+    return win->col == rect_byte(pce, 0) && win->row == rect_byte(pce, 1) && win->w == rect_byte(pce, 2) &&
+           win->h == rect_byte(pce, 3) && win->page == rect_byte(pce, 4);
 }
 
 void ys_windows_hook(YsWindows *w, Pce *pce)
@@ -114,19 +124,19 @@ void ys_windows_hook(YsWindows *w, Pce *pce)
     int h = which_hook(pce);
     if (h < 0)
         return;
-    if (h == HOOK_OPENING && w->count == 0) /* $3E may come dirty from the game's intro (ys_windows.h, n3e_extra) */
-        w->n3e_extra = RAM(pce, 0x203E);
+    if (h == YS_WIN_HOOK_OPENING && w->count == 0) /* $3E may come dirty from the game's intro (ys_windows.h, n3e_extra) */
+        w->n3e_extra = RAM(pce, g_ys_profile.windows->count);
     YsWindow *top = w->count ? &w->win[w->count - 1] : NULL;
     switch (h) {
-    case HOOK_OPENING: {
+    case YS_WIN_HOOK_OPENING: {
         if (w->count == YS_WIN_MAX)
             break;
         YsWindow *n = &w->win[w->count++];
-        n->col = RAM(pce, 0x203F);
-        n->row = RAM(pce, 0x2040);
-        n->w = RAM(pce, 0x2041);
-        n->h = RAM(pce, 0x2042);
-        n->page = RAM(pce, 0x2043);
+        n->col = rect_byte(pce, 0);
+        n->row = rect_byte(pce, 1);
+        n->w = rect_byte(pce, 2);
+        n->h = rect_byte(pce, 3);
+        n->page = rect_byte(pce, 4);
         set_bat(n, pce);
         n->state = YS_WIN_OPENING;
         n->done = 0;
@@ -134,14 +144,14 @@ void ys_windows_hook(YsWindows *w, Pce *pce)
         n->chg_row = n->start_row = (uint8_t)image_row(pce);
         break;
     }
-    case HOOK_DRAWN: /* the border resets $40 to the 1st line at the end: without this, "opening" at the frame's end looked empty */
+    case YS_WIN_HOOK_DRAWN: /* the border resets $40 to the 1st line at the end: without this, "opening" at the frame's end looked empty */
         if (top && top->state == YS_WIN_OPENING) {
             top->done = 1;
             top->vis1 = (uint8_t)(top->row + top->h);
             top->chg_row = (uint8_t)image_row(pce);
         }
         break;
-    case HOOK_OPEN:
+    case YS_WIN_HOOK_OPEN:
         if (top && top->state == YS_WIN_OPENING) {
             top->state = YS_WIN_OPEN;
             top->vis0 = top->row;
@@ -149,7 +159,7 @@ void ys_windows_hook(YsWindows *w, Pce *pce)
             w->opens++;
         }
         break;
-    case HOOK_CLOSING:
+    case YS_WIN_HOOK_CLOSING:
         /* the top one, the one the game just popped into $3F-$43 */
         for (int k = w->count - 1; k >= 0; k--)
             if (w->win[k].state == YS_WIN_OPEN && same_rect(&w->win[k], pce)) {
@@ -159,7 +169,7 @@ void ys_windows_hook(YsWindows *w, Pce *pce)
                 break;
             }
         break;
-    case HOOK_RESTORED: /* the saved background fully restored (with no saved background, $6052 jumps to $605A) */
+    case YS_WIN_HOOK_RESTORED: /* the saved background fully restored (with no saved background, $6052 jumps to $605A) */
         for (int k = w->count - 1; k >= 0; k--)
             if (w->win[k].state == YS_WIN_CLOSING) {
                 w->win[k].done = 1;
@@ -168,7 +178,7 @@ void ys_windows_hook(YsWindows *w, Pce *pce)
                 break;
             }
         break;
-    case HOOK_CLOSED:
+    case YS_WIN_HOOK_CLOSED:
         for (int k = w->count - 1; k >= 0; k--)
             if (w->win[k].state == YS_WIN_CLOSING) {
                 if (w->gone_n < YS_WIN_MAX) { /* leaves the list; in this frame's image, still above the change line */
@@ -188,7 +198,8 @@ void ys_windows_hook(YsWindows *w, Pce *pce)
 
 void ys_windows_frame(YsWindows *w, Pce *pce, long frame)
 {
-    int row = RAM(pce, 0x2040), open = 0;
+    const YsWindowsProfile *p = g_ys_profile.windows;
+    int row = rect_byte(pce, 1), open = 0;
     for (int k = 0; k < w->count; k++) {
         YsWindow *win = &w->win[k];
         int end = win->row + win->h;
@@ -204,17 +215,17 @@ void ys_windows_frame(YsWindows *w, Pce *pce, long frame)
             win->chg_row = 1; /* moved during the frame: the image started as it was */
         open += win->state == YS_WIN_OPEN;
     }
-    int n3e = RAM(pce, 0x203E) - w->n3e_extra;
+    int n3e = RAM(pce, p->count) - w->n3e_extra;
     w->last_ok = 1;
     if (w->count == 0)
         return; /* no window (in the game's intro, $3E is something else) */
     w->frames++;
     int ok = open == n3e;
     /* the 5 bytes of each open one, in order, on the game's stack (shared with other uses: no fixed place) */
-    const uint8_t *s = &RAM(pce, 0x33C7);
-    int len = RAM(pce, 0x33C6), pos = 0;
-    if (len > 0x2000 - 0x13C7)
-        len = 0x2000 - 0x13C7;
+    const uint8_t *s = &RAM(pce, p->stack);
+    int len = RAM(pce, p->stack_len), pos = 0, room = (int)sizeof(pce->ram) - (p->stack - 0x2000);
+    if (len > room) /* no further than the end of RAM */
+        len = room;
     for (int k = 0; k < w->count && ok; k++) {
         const YsWindow *b = &w->win[k];
         if (b->state != YS_WIN_OPEN)

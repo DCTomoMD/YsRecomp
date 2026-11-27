@@ -91,6 +91,75 @@ typedef struct YsRewardProfile {
     uint16_t exp;    /* EXP (24 bits, low byte first) */
 } YsRewardProfile;
 
+/* app/ys_windows.c: the game's window system (order of hooks[] = the YS_WIN_HOOK_* values) and the screen layout
+ * switch of the large menus */
+enum { YS_WIN_HOOK_OPENING, YS_WIN_HOOK_DRAWN, YS_WIN_HOOK_OPEN, YS_WIN_HOOK_CLOSING, YS_WIN_HOOK_RESTORED,
+       YS_WIN_HOOK_CLOSED, YS_WIN_HOOKS };
+typedef struct YsWindowsHook {
+    uint16_t pc;
+    uint8_t sig[5];
+    uint8_t skip; /* bits of the bytes that do not count */
+} YsWindowsHook;
+typedef struct YsWindowsProfile {
+    uint8_t bank; /* window system, in window 3 */
+    YsWindowsHook hooks[YS_WIN_HOOKS];
+    uint8_t layout_bank;        /* layout switch, in window 3 */
+    uint16_t one_scroll_pc[2];  /* Ys I, Ys II: enters the single scroll */
+    uint8_t one_scroll_sig[12];
+    uint16_t split_pc[2];       /* Ys I, Ys II: back to the split */
+    uint8_t split_sig[13];
+    uint16_t count;      /* windows open (the game's counter) */
+    uint16_t rect;       /* the current window: column, row, width, height, page (5 bytes) */
+    uint16_t camera_x;   /* logic camera (16 bits each, low byte first) */
+    uint16_t camera_y;
+    uint16_t stack_len;  /* bytes on the game's window stack */
+    uint16_t stack;      /* the stack: 5 bytes (as rect) for each window */
+} YsWindowsProfile;
+
+/* app/ys_intro.c: the intro program's script and main menu (order of screens[] = the YS_INTRO_OP_* values) */
+enum { YS_INTRO_OP_NEC, YS_INTRO_OP_LOGO, YS_INTRO_OP_COPYRIGHT, YS_INTRO_OPS };
+typedef struct YsIntroOp {
+    uint16_t addr; /* the script operation that starts the screen (the fade that lights it up) */
+    uint8_t op[9];
+} YsIntroOp;
+typedef struct YsIntroProfile {
+    uint8_t bank;        /* in window 2 */
+    uint16_t script_pc;  /* the script loop */
+    uint8_t script_sig[4];
+    uint16_t menu_pc;    /* the main menu routine */
+    uint8_t menu_sig[5];
+    YsIntroOp screens[YS_INTRO_OPS];
+    uint16_t script;     /* pointer to the next operation (16 bits, low byte first) */
+    uint16_t lock;       /* frames without accepting buttons */
+    uint16_t flags;      /* its bit hurry: button accepted */
+    uint8_t hurry;
+    uint16_t mask;       /* buttons that count */
+} YsIntroProfile;
+
+/* app/ys_dialog.c: the text program's letter speed */
+typedef struct YsDialogProfile {
+    uint8_t bank;        /* in window 2 */
+    uint16_t test_pc[3]; /* the speed test in each of the three disc programs that have the text program */
+    uint8_t sig[26];     /* from the speed's LDA to the wait for the next frame */
+    uint8_t sig_test;    /* byte of sig at test_pc */
+    uint8_t sig_wait;    /* byte of sig of the wait (the text waits for the next frame for the next letter) */
+    uint16_t speed;      /* speed of the text task, index X */
+} YsDialogProfile;
+
+/* app/ys_fade.c: the game's fade routines, found by their code in any bank of the CD RAM (0xFFFF = any byte) */
+typedef struct YsFadeProfile {
+    uint16_t transform[16]; /* start of the fade routine (both families) */
+    uint8_t level_at;       /* bytes of transform: the zero-page level, */
+    uint8_t table_at;       /* the table's address (16 bits), */
+    uint8_t family_at;      /* the byte after transform that tells the families apart */
+    uint8_t scenes_op;      /* its value in the scenes' family (ADC zp; the brightening's zero page follows) */
+    uint8_t caller_skip_op; /* after the caller's JSR: optional instruction (2 bytes), */
+    uint8_t caller_op[2];   /* then these two; the zero page of the destination follows */
+    uint16_t flash[20];     /* flash loop (end-of-Ys-I area) */
+    uint8_t flash_zp_at;    /* byte of flash: the zero page of the color */
+    uint16_t colors;        /* shown colors in RAM: 256 background, then 256 sprites (2 bytes each) */
+} YsFadeProfile;
+
 typedef struct YsProfile {
     const YsIdentity *identity;
     const YsDiscIdentity *disc;
@@ -98,6 +167,10 @@ typedef struct YsProfile {
     const YsScreenProfile *screen;
     const YsScrollProfile *scroll;
     const YsRewardProfile *reward;
+    const YsWindowsProfile *windows;
+    const YsIntroProfile *intro;
+    const YsDialogProfile *dialog;
+    const YsFadeProfile *fade;
 } YsProfile;
 
 extern const YsProfile g_ys_profile;

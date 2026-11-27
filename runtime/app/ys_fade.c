@@ -4,8 +4,11 @@
 #include <string.h>
 
 #include "cd/cdrom.h"
+#include "profile/ys_profile.h"
 
-#define RAM_COLORS 0x3C00 /* shown colors in RAM: $3C00-$3DFF background, $3E00-$3FFF sprites */
+/* The routines' code and the shown colors in RAM ($3C00-$3DFF background, $3E00-$3FFF sprites in Ys I & II USA):
+ * g_ys_profile.fade */
+#define RAM_COLORS (g_ys_profile.fade->colors)
 
 static uint8_t read_logical(const Pce *pce, uint16_t addr)
 {
@@ -36,18 +39,9 @@ static int code_is(const Pce *pce, uint16_t pc, const uint16_t *sig, int n)
     return 1;
 }
 
-/* Start of the fade routine (both families):
- *   STX zp_lo; STA zp_lo+1; TXA; AND #7; ASL; ASL; ASL; ORA level; TAX; LDA table,X
- * then, in the programs' one: STA $88 (0x85); in the scenes' one: ADC brightening (0x65 zp) */
-static const uint16_t k_transform[] = { 0x86, 0xFFFF, 0x85, 0xFFFF, 0x8A, 0x29, 0x07, 0x0A, 0x0A, 0x0A,
-                                        0x05, 0xFFFF, 0xAA, 0xBD, 0xFFFF, 0xFFFF };
-#define TRANSFORM_LEN 16
-
-/* Flash loop (end-of-Ys-I area): LDA (zp); TAX; AND #7; TAY; LDA table,Y; STA $00; TXA; AND #$38; CMP #$38;
- * BEQ +2; ADC #8 */
-static const uint16_t k_flash[] = { 0xB2, 0xFFFF, 0xAA, 0x29, 0x07, 0xA8, 0xB9, 0xFFFF, 0xFFFF, 0x85, 0x00,
-                                    0x8A, 0x29, 0x38, 0xC9, 0x38, 0xF0, 0x02, 0x69, 0x08 };
-#define FLASH_LEN 20
+/* The start of the fade routine (both families) and the flash loop: g_ys_profile.fade->transform, ->flash */
+#define TRANSFORM_LEN ((int)(sizeof(g_ys_profile.fade->transform) / sizeof(g_ys_profile.fade->transform[0])))
+#define FLASH_LEN ((int)(sizeof(g_ys_profile.fade->flash) / sizeof(g_ys_profile.fade->flash[0])))
 
 void ys_fade_init(YsFade *f)
 {
@@ -90,12 +84,14 @@ static int color_ok(const YsFade *f, const YsFadeColor *c, uint16_t shown)
 /* Entry of the fade routine: the color in X/A at the current level and brightening goes to the caller's ($zp),Y-1 */
 static void on_transform(YsFade *f, Pce *pce, uint16_t pc)
 {
+    const YsFadeProfile *p = g_ys_profile.fade;
     f->transforms++;
-    uint8_t level = pce->ram[read_logical(pce, (uint16_t)(pc + 11))];
-    uint16_t table = (uint16_t)(read_logical(pce, (uint16_t)(pc + 14)) | read_logical(pce, (uint16_t)(pc + 15)) << 8);
+    uint8_t level = pce->ram[read_logical(pce, (uint16_t)(pc + p->level_at))];
+    uint16_t table = (uint16_t)(read_logical(pce, (uint16_t)(pc + p->table_at)) |
+                                read_logical(pce, (uint16_t)(pc + p->table_at + 1)) << 8);
     int add = 0;
-    if (read_logical(pce, (uint16_t)(pc + 16)) == 0x65) /* scenes family: ADC brightening */
-        add = pce->ram[read_logical(pce, (uint16_t)(pc + 17))];
+    if (read_logical(pce, (uint16_t)(pc + p->family_at)) == p->scenes_op) /* scenes family: ADC brightening */
+        add = pce->ram[read_logical(pce, (uint16_t)(pc + p->family_at + 1))];
     if (!f->table_ok) {
         for (int i = 0; i < 64; i++)
             f->table[i] = read_logical(pce, (uint16_t)(table + i));
@@ -104,9 +100,9 @@ static void on_transform(YsFade *f, Pce *pce, uint16_t pc)
     /* The caller: the JSR left on the stack the address of its last byte; after it comes (LDA zp;) DEY; STA (dest),Y */
     uint8_t s = pce->cpu.s;
     uint16_t ret = (uint16_t)((pce->ram[0x100 + (uint8_t)(s + 1)] | pce->ram[0x100 + (uint8_t)(s + 2)] << 8) + 1);
-    if (read_logical(pce, ret) == 0xA5)
+    if (read_logical(pce, ret) == p->caller_skip_op)
         ret = (uint16_t)(ret + 2);
-    if (read_logical(pce, ret) != 0x88 || read_logical(pce, (uint16_t)(ret + 1)) != 0x91) {
+    if (read_logical(pce, ret) != p->caller_op[0] || read_logical(pce, (uint16_t)(ret + 1)) != p->caller_op[1]) {
         f->unknown_dest++;
         return;
     }
@@ -126,7 +122,7 @@ static void on_transform(YsFade *f, Pce *pce, uint16_t pc)
 static void on_flash(YsFade *f, Pce *pce, uint16_t pc)
 {
     f->flashes++;
-    uint8_t zp = read_logical(pce, (uint16_t)(pc + 1));
+    uint8_t zp = read_logical(pce, (uint16_t)(pc + g_ys_profile.fade->flash_zp_at));
     uint16_t dest = ram_word(pce, (uint16_t)(0x2000 + zp));
     if (dest < RAM_COLORS || dest >= RAM_COLORS + 0x400 || (dest & 1))
         return;
@@ -184,12 +180,13 @@ void ys_fade_hook(YsFade *f, Pce *pce)
     uint16_t pc = pce->cpu.pc;
     uint8_t bank = pce->cpu.mpr[pc >> 13];
     if (bank >= 0x80 && bank <= 0x87) {
+        const YsFadeProfile *p = g_ys_profile.fade;
         uint8_t op = read_logical(pce, pc);
-        if (op == 0x86) {
-            if (code_is(pce, pc, k_transform, TRANSFORM_LEN))
+        if (op == p->transform[0]) { /* the first byte, before the whole routine */
+            if (code_is(pce, pc, p->transform, TRANSFORM_LEN))
                 on_transform(f, pce, pc);
-        } else if (op == 0xB2) {
-            if (code_is(pce, pc, k_flash, FLASH_LEN))
+        } else if (op == p->flash[0]) {
+            if (code_is(pce, pc, p->flash, FLASH_LEN))
                 on_flash(f, pce, pc);
         }
     }
