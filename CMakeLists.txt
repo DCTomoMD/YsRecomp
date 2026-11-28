@@ -109,7 +109,13 @@ set_source_files_properties(runtime/app/launcher_image.c PROPERTIES INCLUDE_DIRE
 
 # Profile of the USA edition (runtime/profile: the values that come from its disc, review_jp/01_profile_design.md).
 # Each executable links exactly one profile; every one that uses runtime/app links this one (review_jp/05, Q1).
-add_library(ys_profile_usa STATIC runtime/profile/profile_usa.c)
+# OBJECT libraries (Phase 3B-2): the object goes into each executable as it is, so two profiles in one executable
+# fail to link (g_ys_profile defined twice: the editions never mix). As STATIC archives, the linker silently took
+# the first one listed (review_jp/04_phase3b_plan.md, 11).
+add_library(ys_profile_usa OBJECT runtime/profile/profile_usa.c)
+# Profile of the JP edition (Phase 3B-2): identity, BIOS policy and disc fingerprint only, every feature NULL. Built
+# with or without the ROMs (plain data); no executable links it yet but its check (YsIandII_JP: 3B-3).
+add_library(ys_profile_jp OBJECT runtime/profile/profile_jp.c)
 
 # Main program (window), with the interpreter.
 add_executable(pce_runtime runtime/main.c)
@@ -157,6 +163,13 @@ set_tests_properties(app_cd_menu_music PROPERTIES SKIP_RETURN_CODE 77)
 # Where the program reads its resources and writes the user's data (host layer; the OS policy comes from
 # cmake/platform_*.cmake: next to the executable on Windows, Application Support on macOS).
 add_test(NAME host_paths COMMAND app_tests paths ${PLATFORM_USER_DIR} "${CMAKE_BINARY_DIR}/app_output/host_paths")
+# The JP profile linked alone (no ROM): its identity, BIOS policy (required) and disc are given, every feature part
+# is NULL (review_jp/04_phase3b_plan.md, 3B-2). Label jp (no other edition's test).
+add_executable(profile_check_jp tests/profile/profile_check.c)
+target_link_libraries(profile_check_jp PRIVATE ys_profile_jp)
+add_test(NAME profile_ysjp COMMAND profile_check_jp jp 1 identity,disc,bios)
+set_tests_properties(profile_ysjp PROPERTIES PASS_REGULAR_EXPRESSION "profile_check: OK"
+    FAIL_REGULAR_EXPRESSION "FAILED" LABELS jp)
 
 
 find_program(PYTHON_EXE NAMES python python3)
@@ -197,7 +210,7 @@ ys_edition(ID jp CUE "${YS_JP_CUE}" BIOS "${YS_JP_BIOS}" GAME_DIR "${CMAKE_SOURC
 # touch the console or the recompiler. Tests of the same session run together in a single run.
 set(TESTS_QUICK app_config app_volume app_menu app_video app_image app_crop
     app_redraw app_fade app_input app_disc_id app_cd_menu_music app_start_ys nobios_ys app_launcher equip_c_ys
-    app_mark_ys host_layers host_paths)
+    app_mark_ys host_layers host_paths profile_ysjp)
 set(TESTS_CONSOLE trace_ys_boot trace_ys_run session_ys_boot session_ys_game session_ys_save fade_ys
     coverage_ys bios_c_ys hle_timing_ys nobios_cabin_ys equip_preview_ys equip_ice_preview_ys game_windows_ys windows_ys1 windows_crop_ys
     panel_ys jp_boot_ysjp)

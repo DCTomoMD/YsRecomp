@@ -327,3 +327,174 @@ Select-String -Path b1_*.txt -Pattern "warning|tests passed|\*\*\*Failed|Not Run
 | B1-3 | `pce_trace_jp`（日本版の profile をリンクしたもの）。それまで煙試験は `pce_trace` を Ys のオプションなしで使う | 3B-2 以降 |
 | B1-4 | ツールの `--edition jp` は受け付けるだけ（セッション・実行ファイルがない）。M2-4 の 6 本の版の引数 | 3B-7 |
 | B1-5 | `05` の 14.6（Windows での 3A の確認の結果）はまだ書かれていない（14.4 は保留のまま） | 後日の実機 [W] |
+
+---
+
+## 11. 3B-2 の結果（2026-11-28、macOS arm64）：`profile_jp.c` と `ys_profile_jp`、依存の規則
+
+before（基準）は `ea25858`。PCERecomp（`external/PCERecomp`）は変更していない。roms/ は読み取りのみ（ディスクの指紋と BIOS の
+CRC32 を確かめ直しただけ）。表記：[C] macOS で実行して確かめた、[W] Windows の実機での確認待ち、[A] 推測、[U] 不明。
+
+### 11.1 決めたこと（2026-11-28、ユーザーの回答。すべて推奨案）
+
+| ID | 質問 | 決定 |
+|---|---|---|
+| Q2-1 | 日本版の `disc.title`（データトラックの英語の文字列。ディスク由来の文章） | **NULL**。日本版はトラック数と 2 つの CRC だけで識別する。`disc_id.c` は今は `title` が NULL だと動かない（`strlen(d->title)`）ので、日本版をリンクする段（3B-5／3B-6）で NULL を扱えるようにする |
+| Q2-2 | 日本版の表示名（ROM 由来ではなく、こちらで決める英語の文言） | `disc_name` `"Ys I & II (Japan)"`、`game_name` `"Ys I & II"`、`version_name` `"Ys I & II, Japan"` |
+| Q2-3 | 依存の規則の試験 | `check_layers.py` に規則 8 を足し（`host_layers` が確かめる）、ROM の要らない試験 `profile_ysjp` を作る |
+| Q2-4 | `ys_edition()` の `PROFILE`・`EXE` などの引数化（B1-2） | 3B-3 に回す。3B-2 では `ys_profile_jp` をどの実行ファイルにもリンクしない（試験のプログラムを除く） |
+
+### 11.2 変更の内容
+
+| ファイル | 変更 |
+|---|---|
+| `runtime/profile/ys_profile.h` | `YsIdentity` に `edition_id`（ログとセッションのヘッダーだけに使う。コードで比べない＝規則 7）。新しい型 `YsBiosPolicy`（`required`、`check_crc`、`crc`）と、`YsProfile` の `bios`（`disc` の次）。`YsProfile` の前に「identity と bios は NULL にならない、disc が NULL ならディスクを受け付けない、ほかは NULL ならその機能が無効」の注記。`title` の注記に「NULL：数値だけで識別」 |
+| `runtime/profile/profile_usa.c` | 行を足しただけ（消した行・変えた行は 0）：`.edition_id = "usa"`、`k_bios`（`required = 0`、`check_crc = 0`。今までどおり C の BIOS が既定で、`--bios` の実 BIOS は照合しない）、`.bios = &k_bios` |
+| `runtime/profile/profile_jp.c`（新規） | `identity`（`jp`、`YsIandII_JP`、`YsIandII_JP.ini`、`Ys I & II (Japan)`）、`disc`（トラック数 43、TOC の CRC・データの CRC は `03` の 3.2 の [C]、`title` NULL）、`bios`（`required = 1`、`check_crc = 1`、CRC32 は `03` の 8.1 の [C]。違えば警告して続ける＝Q5）。ほかの 16 個はすべて NULL。北米版の値は 1 つも写していない |
+| `tests/profile/profile_check.c`（新規） | profile を 1 つだけリンクする小さなプログラム（`runtime/app` も SDL も使わない）。`profile_check 版 BIOS必須 あるべき部分の一覧` で、一覧の部分だけが NULL でなく、ほかはすべて NULL であること、`edition_id`・`bios->required` が期待どおりで、identity の文言が空でないこと、disc のトラック数と名前があることを確かめる。`_Static_assert` で、`YsProfile` の全 19 個のポインタを表に挙げていることを確かめる（部分を足して表を直し忘れると、コンパイルが失敗する） |
+| `CMakeLists.txt` | `ys_profile_usa` を **STATIC から OBJECT に替えた**（11.4）。`ys_profile_jp`（OBJECT、ROM の有無によらず常に作る）。`profile_check_jp`（`ys_profile_jp` だけをリンク）と試験 `profile_ysjp`（`profile_check_jp jp 1 identity,disc,bios`、`PASS_REGULAR_EXPRESSION "profile_check: OK"`、`FAIL_REGULAR_EXPRESSION "FAILED"`、ラベル `jp`）。`TESTS_QUICK` に `profile_ysjp` |
+| `tools/check_layers.py` | 規則 8：`g_ys_profile` を定義してよいのは `runtime/profile/profile_<版>.c` だけで、それぞれちょうど 1 回。`runtime/`・`tools/`・`tests/` のほかの場所に定義があれば違反。`profile_<版>.c` が 1 つもないのも違反 |
+| `CLAUDE.md` | profile 層の節（OBJECT にしたこと、`profile_jp.c` の中身、規則 8） |
+| `review_jp/02_build_layout.md` | 2.3 の「2 つリンクすると失敗する」に、OBJECT のときだけ成り立つことを追記した |
+
+- 01 の 9 章の grep 4 つは、3A の時点で `host_layers` が確かめている（規則 1・2・5・6・7）。3B-2 で足したのは規則 8 だけ。
+- `profile_ysjp` の期待値（版 `jp`、BIOS 必須 1、あるべき部分 `identity,disc,bios`）は、ユーザーの決定（P1・P9・Q1）で決まるもので、
+  ROM から得た値ではない。ディスクの CRC などの値は試験の期待値に入れていない（`profile_jp.c` にだけある）。
+
+### 11.3 日本版の値の出どころ（すべて [C]）
+
+| 値 | 出どころ | 3B-2 で確かめ直したこと |
+|---|---|---|
+| トラック数 43、TOC の CRC、データの CRC | `03` の 3.2 | `build/Release/app_tests --fingerprint "roms/jp/Ys I & II (Japan).cue"` → `tracks 43`、`toc_crc D09EEBFB`、`data_crc D47ABAE2`（同じ） |
+| System Card 3.0 の CRC32 | `03` の 8.1 | `roms/bios/syscard3.pce` を Python の `zlib.crc32` で読む → 262144 バイト、`6D9A73EF`（同じ） |
+| 名前と文言 | P9・P10・Q2-2（ユーザーの決定） | ― |
+
+UNKNOWN のまま（NULL にしたもの）：`music`・`screen`・`scroll`・`reward`・`windows`・`intro`・`dialog`・`fade`・`common`・`engine`・
+`panel`・`equip`・`menu_font`・`launcher_sfx`・`intro_skip`・`trace`。`03` で [C] になっている値もあるが、機能を有効にするのは 3C（1 章）。
+
+### 11.4 分かったこと：STATIC のライブラリでは、profile が 2 つあってもリンクが通る [C]
+
+計画（4 章 3B-2）では「profile が 2 つ混ざるとリンクが失敗すること（意図した失敗）を一度だけ手で確かめる」としていた。
+02 の 2.3 も同じことを前提にしていた。ところが、確かめると次のようになった。
+
+| リンクのしかた（`profile_check.c` と 2 つの profile） | 結果 |
+|---|---|
+| `libys_profile_usa.a libys_profile_jp.a`（STATIC、北米版が先） | **リンクが通る**（終了コード 0、警告なし）。実行すると `edition usa` |
+| `libys_profile_jp.a libys_profile_usa.a`（STATIC、日本版が先） | **リンクが通る**。実行すると `edition jp` |
+| `profile_usa.c profile_jp.c`（オブジェクトとして） | `duplicate symbol '_g_ys_profile'`、リンクが失敗する |
+| profile なし | `Undefined symbols`、リンクが失敗する |
+
+- 理由：リンカは、静的ライブラリからは足りない記号を埋めるオブジェクトだけを取り出す。1 つ目で `g_ys_profile` が埋まるので、
+  2 つ目は読まれない（macOS の ld で確かめた。MSVC の `link.exe` も `.lib` を同じように扱うと考えている [A]、[W]）。
+- 扱い：`ys_profile_usa`・`ys_profile_jp` を **OBJECT ライブラリ**にした。`target_link_libraries(... ys_profile_usa)` の形は同じで、
+  オブジェクトが各実行ファイル（`pce_runtime`、`pce_trace`、`app_tests`、`equip_check`、`ys_trace`、`YsRecomp`）に直接入る。
+  北米版の実行ファイルに入る中身は前と同じ（`profile_usa.c` の 1 つのオブジェクト）。
+- OBJECT にしたあと、手で 1 回だけ確かめた [C]：`CMakeLists.txt` の `profile_check_jp` の行を一時的に
+  `target_link_libraries(profile_check_jp PRIVATE ys_profile_jp ys_profile_usa)` にして `cmake --build build --config Release
+  --target profile_check_jp` → `duplicate symbol '_g_ys_profile'`、`ld: 1 duplicate symbols` で失敗した。元に戻して作り直し、
+  `profile_ysjp` が合格することを確かめた。
+- 古い `build/Release/libys_profile_*.a` はビルドのフォルダに残るが、もう何もリンクしない（消していない）。
+
+### 11.5 北米版の試験の定義が前と同じこと（macOS、[C]）
+
+基準 `ea25858` を `git archive` で作業用フォルダに出し、今の作業ツリーのファイルを同じように写して、同じ引数
+（`PCERECOMP_DIR`、`FETCHCONTENT_SOURCE_DIR_SDL3`、`PYTHON_EXE`、`YS_*` の 4 つ）で 4 通りに構成した。`CTestTestfile.cmake` は、
+CMake の行番号（`_BACKTRACE_TRIPLES`）と作業用フォルダの場所をそろえて比べた。
+
+| 構成 | before（`ea25858`） | after | 差 |
+|---|---|---|---|
+| 北米版あり・日本版あり | 101 本 | 102 本 | before にだけある行 0。after にだけある 12 行は、すべて `profile_ysjp` の `add_test`・`set_tests_properties` と、それを囲む `if`〜`endif` |
+| 北米版あり・日本版なし | 101 本 | 102 本 | 同じ |
+| 北米版なし・日本版あり | 34 本 | 35 本 | 同じ |
+| 両方なし | 34 本 | 35 本 | 同じ（`profile_ysjp` は ROM が要らないので、どの構成でも定義される） |
+
+- ラベルの本数（両方ありの構成）：`usa` 81 → 81、`jp` 1 → 2、`quick` 22 → 23、`console` 18 → 18、`recomp` 49 → 49、`history` 10 → 10、
+  `package` 2 → 2。`profile_ysjp` のラベルは `jp;quick`。
+- `--edition` ごとの quick：`all` 23 本、`usa`（`-L quick -LE ^(jp)$`）22 本（3B-2 の前と同じ）、`jp`（`-L quick -LE ^(usa)$`）19 本。
+
+### 11.6 macOS で確かめたこと
+
+| 確かめたこと | 結果 |
+|---|---|
+| ビルド（`scripts/build.sh`） | 警告 0、`Built.` [C] |
+| `profile_ysjp`（`profile_check_jp jp 1 identity,disc,bios`） | 合格。identity・disc・bios が present、ほかの 16 個が `NULL (off)`、`edition jp`、`bios required 1, crc checked`、`disc 43 tracks, title none` [C] |
+| `profile_check` がわざと違う期待で落ちること | `usa 0 identity,disc,bios,music` → `music is NULL`、`edition jp, expected usa`、`bios required 1, expected 0` の 3 つで失敗。`jp 1 identity,bios` → `disc is present, expected NULL` で失敗。引数なし → 2 [C] |
+| 同じプログラムを北米版の profile と手でリンクした場合（試験にはしない） | `usa 0 <19 個すべて>` で合格（`title given`、`crc not checked`）[C] |
+| `check_layers.py --pcerecomp external/PCERecomp` | **OK** [C] |
+| 規則 8 がわざとの違反で落ちること | 一時的なファイルを 2 つ置いた（`tests/profile/zz_tmp_def.c` に定義 1 つ、`runtime/profile/profile_zz.c` に定義 2 つ）→ `g_ys_profile defined outside runtime/profile/profile_<edition>.c` と `defined 2 time(s), expected 1` の 2 件で失敗（終了コード 1）。消したあとは OK [C] |
+| T1（`tools/profile_values.py ea25858`） | 13 件の差。すべて 3B-2 で新しく足した値（`"usa"`・`"jp"`、北米版の `required`・`check_crc` の 0 が 2 つ、日本版の 43・2 つの CRC・BIOS の CRC・`required`/`check_crc` の 1 が 2 つ・`title`/`title_sector` の 0 が 2 つ、日本版の文言 5 つ）で、コードから出た値はない。T1 は値の移し替えを確かめる道具なので、移し替えのない 3B-2 ではこの差が出るのが正しい。`profile_usa.c` の `git diff` は足した行だけ [C] |
+| `ctest -LE history -j 4 --repeat until-pass:2` | **92 本のうち 91 本が合格、skip 1 本（`perf_ys`）、失敗 0**（1101 秒）[C]。内訳：3B-2 の前からある 91 本は 90 本が合格し、`perf_ys` が skip（3B-1 の後と同じ）。新しい `profile_ysjp` は合格。やり直しになった試験はない（`run 2/2` が 0 件）。`app_prep_ys` は 1 回目で合格（141 秒）、`jp_boot_ysjp` も合格（8.1 秒） |
+| `build.ps1` | pwsh がこの Mac にないので動かしていない [W] |
+
+### 11.7 Windows の実機での確認手順（保留：後日まとめて行う。10.4 と同じ形）
+
+before は `ea25858`、after はブランチの先頭（3B-2 のコミットを含む）。サブモジュールは変えていない。
+ROM と BIOS の置き方は 10.4 と同じ。CMake を変えたので、after でも構成し直す（`build.ps1` が行う）。
+
+```powershell
+cd C:\work\YsRecomp
+$env:Path = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;" + $env:Path
+# before
+git fetch; git checkout ea25858; git submodule update
+Remove-Item -Recurse -Force build
+.\build.ps1 *> b2_before_build.txt
+ctest --test-dir build -C Release -N | Select-String "Total Tests"     # -> 101
+ctest --test-dir build -C Release -N | Select-String "Test +#" | ForEach-Object { ($_ -split '\s+')[3] } | Set-Content b2_before_names.txt
+Copy-Item build\CTestTestfile.cmake b2_before_ctest.cmake
+ctest --test-dir build -C Release -LE history -j 2 --repeat until-pass:2 *> b2_before_testall.txt
+# after
+git checkout feature/japanese-disc-support; git pull; git submodule update
+.\build.ps1 *> b2_after_build.txt
+ctest --test-dir build -C Release -N | Select-String "Total Tests"     # -> 102
+ctest --test-dir build -C Release -N -L jp | Select-String "Test +#|Total Tests"   # -> profile_ysjp, jp_boot_ysjp, 2
+ctest --test-dir build -C Release -N | Select-String "Test +#" | ForEach-Object { ($_ -split '\s+')[3] } | Set-Content b2_after_names.txt
+Compare-Object (Get-Content b2_before_names.txt) (Get-Content b2_after_names.txt)
+Compare-Object ((Get-Content b2_before_ctest.cmake) -replace ' _BACKTRACE_TRIPLES "[^"]*"','') ((Get-Content build\CTestTestfile.cmake) -replace ' _BACKTRACE_TRIPLES "[^"]*"','') | Out-File b2_ctest_diff.txt
+ctest --test-dir build -C Release -LE history -j 2 --repeat until-pass:2 *> b2_after_testall.txt
+ctest --test-dir build -C Release -R "profile_ysjp|host_layers" -V | Select-String "profile_check:|check_layers:" *> b2_after_profile.txt
+.\build.ps1 -Test -Edition usa *> b2_after_ed_usa_quick.txt
+.\build.ps1 -Test -Edition jp *> b2_after_ed_jp_quick.txt
+git status --short
+Select-String -Path b2_*.txt -Pattern "warning|tests passed|\*\*\*Failed|Not Run|Skipped|Total Tests|Built|profile_check: (OK|FAILED|edition|bios)|check_layers:" |
+  ForEach-Object { "$($_.Filename): $($_.Line.Trim())" } | Set-Content -Encoding utf8 b2_results.txt
+```
+
+profile が 2 つ混ざるとリンクが失敗すること（MSVC、手で 1 回）：
+
+```powershell
+# CMakeLists.txt の 1 行を一時的に替える（Git Bash の sed。PowerShell 5.1 の Set-Content は UTF-8 を壊すので使わない。
+# あとで git checkout で戻す）
+& "C:\Program Files\Git\usr\bin\sed.exe" -i 's/profile_check_jp PRIVATE ys_profile_jp)/profile_check_jp PRIVATE ys_profile_jp ys_profile_usa)/' CMakeLists.txt
+Select-String -Path CMakeLists.txt -Pattern "profile_check_jp PRIVATE"   # -> ... ys_profile_jp ys_profile_usa)
+cmake --build build --config Release --target profile_check_jp 2>&1 | Select-String "LNK2005|LNK1169|error" *> b2_mix.txt
+git checkout -- CMakeLists.txt
+.\build.ps1 *> b2_after_rebuild.txt
+git status --short
+```
+
+| ID | 確かめること | 合格の条件 |
+|---|---|---|
+| W1 | ビルド | `b2_after_build.txt` に `warning` の行がない（`profile_jp.c`・`profile_check.c` の `_Static_assert` と指示付きの初期化子が MSVC の C11 で通る） |
+| W2 | 試験の本数と名前 | before 101、after 102。名前の `Compare-Object` は `profile_ysjp`（`=>`）の 1 行だけ |
+| W3 | 試験の定義 | `b2_ctest_diff.txt` の行はすべて `=>` で、`profile_ysjp` の行と `if(CTEST_CONFIGURATION_TYPE…`・`elseif`・`else()`・`endif()` だけ |
+| W4 | 全試験（history 以外） | before 91 本、after 92 本。`profile_ysjp` 以外の合格・skip・失敗が前後で同じ（skip は `perf_ys`。日本版がなければ `jp_boot_ysjp` も） |
+| W5 | 新しい試験 | `b2_after_profile.txt` に `profile_check: edition jp, …`、`profile_check: bios required 1, crc checked`、`profile_check: OK`、`check_layers: OK` |
+| W6 | `-Edition` | `-Test -Edition usa`：22 本（`profile_ysjp` が出ない）。`-Test -Edition jp`：19 本（`profile_ysjp` を含む） |
+| W7 | 混ざったときのリンク | `b2_mix.txt` に `LNK2005`（`g_ys_profile` already defined）か `LNK1169` があり、ビルドが失敗する。戻したあとの `b2_after_rebuild.txt` は `Built` で、`git status --short` に `CMakeLists.txt` が出ない |
+| W8 | 作業ツリー | `git status --short` に `??` のログ以外が出ない |
+
+貼っていただくもの：`b2_results.txt`、`b2_ctest_diff.txt`、`b2_mix.txt`、`git status --short`。
+push 後の CI（ROM なし）では、試験が 34 → 35 本、実際に動いて合格するものが 15 → 16 本（`profile_ysjp`）になるはず [A]。
+
+### 11.8 未解決・次の段へ
+
+| ID | 内容 | 段 |
+|---|---|---|
+| B2-1 | Windows での 3B-2 の確認（11.7。特に W7：MSVC で OBJECT のときに重複定義で失敗すること、STATIC だと通ってしまうか） | 後日の実機 [W] |
+| B2-2 | `disc_id.c` が `title` NULL を扱えない（`strlen(d->title)`）。日本版をリンクする前に、NULL なら文字列の確認を飛ばして数値だけで識別するように直す。北米版の動作は変えない | 3B-5／3B-6（日本版がディスクを読む段） |
+| B2-3 | `runtime/app`・`main.c`・`tools/trace` は今、profile の部分が NULL でないことを前提に読む（NULL の判定がない）。`YsIandII_JP` をリンクする前に、NULL なら機能を止める判定と、その機能が無効だというログが要る（作業規則 v2 の 10、`01` の 4 章） | 3B-3（リンク）・3B-4（ログとメニュー） |
+| B2-4 | `bios`・`edition_id` はまだ誰も読まない（読むのは 3B-5 の BIOS の流れ、3B-6 のセッションのヘッダー） | 3B-5、3B-6 |
+| B1-1、B1-5 | 10.5 のとおり | 後日の実機 [W] |
+| B1-2 | `ys_edition()` の引数化（Q2-4 で 3B-3 に） | 3B-3 |
+| B1-3 | `pce_trace_jp`：`pce_trace` が使う profile の部分が NULL でも動くようになってから（B2-3） | 3B-3 以降 |
+| B1-4 | 10.5 のとおり | 3B-7 |

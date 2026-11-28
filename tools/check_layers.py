@@ -10,7 +10,9 @@
   6. profile layer (runtime/profile/): plain data, includes nothing from app/ or host/ and no SDL
      (review_jp/01_profile_design.md, chapter 9);
   7. common code and the trace extension (runtime/main.c, runtime/app/, tools/trace/): no branch on the edition
-     (no edition_id comparison, no PCE_EDITION): the edition is chosen by linking one profile, not by code.
+     (no edition_id comparison, no PCE_EDITION): the edition is chosen by linking one profile, not by code;
+  8. the profile itself (g_ys_profile) is defined only in runtime/profile/profile_<edition>.c, exactly once in each
+     (review_jp/04_phase3b_plan.md, 3B-2): runtime/, tools/ and tests/ define it nowhere else.
 
 Usage: python tools/check_layers.py [--pcerecomp FOLDER]
 Exit: 0 = all rules hold, 1 = some rule broken (each case listed), 2 = usage error.
@@ -32,6 +34,8 @@ PCERECOMP_EXT = SOURCE_EXT + (".py", ".txt", ".md", ".cmake", ".toml")
 PCERECOMP_SKIP_DIRS = {"reference", "build", ".git", "__pycache__"}
 PROFILE_DEPS = re.compile(r"#\s*include\s*[<\"](SDL|app/|host/)")
 EDITION_BRANCH = re.compile(r"\bedition_id\s*[=!]=|strcmp\s*\([^)]*edition|\bPCE_EDITION")
+PROFILE_DEFINITION = re.compile(r"^\s*(const\s+)?YsProfile\s+(const\s+)?g_ys_profile\s*(=|;|\[)")
+PROFILE_FILE = re.compile(r"profile_[a-z0-9]+\.c")
 
 
 def source_files(top, exts=SOURCE_EXT, skip_dirs=()):
@@ -74,6 +78,27 @@ def main():
     for top in (os.path.join(runtime, "main.c"), os.path.join(runtime, "app"), os.path.join(ROOT, "tools", "trace")):
         for p in source_files(top):
             scan(p, EDITION_BRANCH, problems, "7 edition branch")
+    profile_files = set()
+    for top in (runtime, os.path.join(ROOT, "tools"), os.path.join(ROOT, "tests")):
+        if not os.path.isdir(top):
+            continue
+        for p in source_files(top):
+            with open(p, encoding="utf-8", errors="replace") as f:
+                lines = [n for n, line in enumerate(f, 1) if PROFILE_DEFINITION.search(line)]
+            rel = os.path.relpath(p, ROOT)
+            own = os.path.dirname(os.path.abspath(p)) == os.path.abspath(profile) and PROFILE_FILE.fullmatch(
+                os.path.basename(p))
+            if own:
+                profile_files.add(rel)
+                if len(lines) != 1:
+                    problems.append(f"8 profile definition: {rel}: g_ys_profile defined {len(lines)} time(s), "
+                                    "expected 1")
+            else:
+                for n in lines:
+                    problems.append(f"8 profile definition: {rel}:{n}: g_ys_profile defined outside "
+                                    "runtime/profile/profile_<edition>.c")
+    if not profile_files:
+        problems.append("8 profile definition: no runtime/profile/profile_<edition>.c found")
     for p in source_files(host):
         scan(p, HOST_GAME, problems, "2 host->game")
         scan(p, HOST_CONSOLE, problems, "4 host->console")

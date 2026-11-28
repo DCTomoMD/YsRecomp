@@ -266,7 +266,10 @@ natively on PC (Windows). The generated C mimics the CPU instruction by instruct
 ## profile 層（Phase 3A、2026-11-28 に macOS で完了。Windows の確認は後日の実機で、手順は review_jp/05 の 14.4）
 - ディスクに由来する値と、版の名前・文言は `runtime/profile/` に置く：`ys_profile.h`（型と、コンパイル時の定数）と
   `profile_usa.c`（`const YsProfile g_ys_profile`。北米版の値）。各モジュールは `g_ys_profile.<module>` を読み、版を尋ねない。
-  実行ファイルは profile をちょうど 1 つリンクする（`ys_profile_usa`。日本版の `profile_jp.c` は Phase 3B）。
+  実行ファイルは profile をちょうど 1 つリンクする（`ys_profile_usa`）。profile のライブラリは OBJECT（3B-2）：STATIC だと
+  2 つ並べてもリンクが通り、先に書いた方が黙って使われるため。日本版の `profile_jp.c`（3B-2）は identity・`bios`（必須、
+  CRC を照合）・`disc`（数値だけ、`title` は NULL）を持ち、ほかはすべて NULL。今は試験 `profile_ysjp`（`profile_check_jp`、
+  quick・jp）だけがリンクする。`g_ys_profile` を定義してよいのは `runtime/profile/profile_<版>.c` だけ（`check_layers.py` の規則 8）。
 - サブ構造体：`identity`・`disc`・`music`・`screen`・`scroll`・`reward`・`windows`・`intro`・`dialog`・`fade`・`common`
   （2 つ以上のモジュールが読む RAM）・`engine`・`panel`・`equip`・`menu_font`・`launcher_sfx`・`intro_skip`・`trace`
   （`tools/trace/` だけが読む値）。RAM は CPU から見た番地（`0x2C41` の形）。2 バイト目以降は「先頭 + n」で読む。

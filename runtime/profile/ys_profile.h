@@ -12,6 +12,8 @@
 
 /* Names the player sees and the files of this edition. */
 typedef struct YsIdentity {
+    const char *edition_id;   /* "usa", "jp": the same as the build's edition (cmake/ys_edition.cmake); for logs and
+                                 session headers only, never compared by the code (tools/check_layers.py, rule 7) */
     const char *app_id;       /* folder of the user's data (host_paths_init): ASCII, safe as a folder name */
     const char *ini_name;     /* settings file in that folder */
     const char *window_title; /* window and message boxes */
@@ -23,11 +25,20 @@ typedef struct YsDiscIdentity {
     int track_count;          /* tracks in the .cue (one .bin each) */
     uint32_t toc_crc;         /* CRC32 of (type, start, sectors) of each track */
     uint32_t data_crc;        /* CRC32 of the user data of the 1st data track */
-    const char *title;        /* text in the data track that tells this game apart from other discs */
+    const char *title;        /* text in the data track that tells this game apart from other discs (NULL: none
+                                 given; the edition is then told by the numbers above only) */
     int title_sector;         /* sector of the data track where it is, counted from the track's first sector */
     const char *game_name;    /* the game, in the messages about a wrong disc */
     const char *version_name; /* the supported version, in the message about different data */
 } YsDiscIdentity;
+
+/* The System Card this edition needs (review_jp/01_profile_design.md, chapter 6). Read by the player flow; nothing
+ * of the BIOS itself is kept here, only numbers about the user's file. */
+typedef struct YsBiosPolicy {
+    int required;   /* 1 = the player flow needs the user's real BIOS file; 0 = it runs with the C BIOS */
+    int check_crc;  /* 1 = compare the file's CRC32 with crc (a different one: warning, the game still starts) */
+    uint32_t crc;   /* CRC32 of the whole file */
+} YsBiosPolicy;
 
 /*
  * Instruction hooks (stage 3A-2). Each table keeps the shape it had in its module (review_jp/05, Q6). A "bank" is the
@@ -257,9 +268,12 @@ typedef struct YsTraceProfile {
     const char *digit_chars; /* its digit tiles from tile_digit_first, as text */
 } YsTraceProfile;
 
+/* identity and bios: never NULL. disc: NULL = no disc is accepted. The others: NULL = that feature is off in this
+ * edition (review_jp/01_profile_design.md, chapter 4). */
 typedef struct YsProfile {
     const YsIdentity *identity;
     const YsDiscIdentity *disc;
+    const YsBiosPolicy *bios;
     const YsMusicProfile *music;
     const YsScreenProfile *screen;
     const YsScrollProfile *scroll;

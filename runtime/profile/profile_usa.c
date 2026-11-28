@@ -5,6 +5,7 @@
 #include "profile/ys_profile.h"
 
 static const YsIdentity k_identity = {
+    .edition_id = "usa",
     .app_id = "YsRecomp",
     .ini_name = "YsRecomp.ini",
     .window_title = "Ys Book I & II",
@@ -20,6 +21,12 @@ static const YsDiscIdentity k_disc = {
     .title_sector = 1,
     .game_name = "Ys Book I & II",
     .version_name = "Ys Book I & II, USA",
+};
+
+/* The C BIOS by default; --bios gives the real one, unchecked (as before Phase 3B) */
+static const YsBiosPolicy k_bios = {
+    .required = 0,
+    .check_crc = 0,
 };
 
 #define COUNT(a) ((int)(sizeof(a) / sizeof((a)[0])))
@@ -292,6 +299,7 @@ static const YsTraceProfile k_trace = {
 const YsProfile g_ys_profile = {
     .identity = &k_identity,
     .disc = &k_disc,
+    .bios = &k_bios,
     .music = &k_music,
     .screen = &k_screen,
     .scroll = &k_scroll,
