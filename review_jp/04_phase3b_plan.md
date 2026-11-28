@@ -298,6 +298,26 @@ Select-String -Path b1_*.txt -Pattern "warning|tests passed|\*\*\*Failed|Not Run
 
 貼っていただくもの：`b1_results.txt`、2 つの `Compare-Object` の出力（`b1_ctest_diff.txt`）、`git status --short`。
 
+#### CI の結果（2026-11-28、GitHub Actions `windows-ci`、Windows x64、ROM なし）
+
+コミット `147b39b` の実行 46085272556 は成功（全ステップ）。実機の確認の代わりにはならない（下の「分からないこと」）。
+
+| | 1 つ前（`8a1033d`、実行 46065566228） | 3B-1（`147b39b`） |
+|---|---|---|
+| 試験の数 | 33 | 34 |
+| 合格（実際に動いた） | 15 | 15 |
+| skip（77。合格ではない） | 17 | 18 |
+| 失敗 | 1 | 1 |
+
+- 増えた 1 本は `jp_boot_ysjp` で、skip（`missing disc or BIOS (…/roms/jp/Ys I & II (Japan).cue / …/roms/bios/syscard3.pce)`）。
+  macOS の ROM なしの構成（33 → 34 本、10.2）と同じ本数 [C]。
+- 失敗の 1 本は `cpu_huc6280`（`reference/huc6280-tests` が Git の外にあるため。基準 `06b62c6` でも 1 つ前でも同じ既知の失敗）。
+- 比較の判定：`OK: no new failures, no lost tests, no pass turned into a skip`（`tools/ci/ctest_report.py`）。
+- 分かったこと [C]：Windows x64（MSVC）で `build.ps1` の構成とビルドが通る。ROM の要らない試験の結果が 1 つ前と同じ。
+  ROM がないとき、日本版の版の定義が構成を止めず、煙試験が 77 で skip になる。
+- 分からないこと（実機の確認待ちのまま）：W1〜W9 のすべて。CI は ROM を使う試験を動かさず、`-Edition usa|jp|all`・
+  `-Package -Edition jp`・`run_bios_check.py --edition jp` も呼ばない。CI のビルドの警告の行数はここでは数えていない。
+
 ### 10.5 未解決・次の段へ
 
 | ID | 内容 | 段 |
